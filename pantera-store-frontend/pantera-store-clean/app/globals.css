@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap');
+
+/* Autohospedada en /public/fonts para no depender de que Google Fonts
+   cargue a tiempo — si no, los íconos se ven como texto ("expand_more"). */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+.rarity-common { border-bottom: 2px solid #B0C3D9; box-shadow: 0 10px 20px -10px rgba(176, 195, 217, 0.3); }
+.rarity-uncommon { border-bottom: 2px solid #5E98D9; box-shadow: 0 10px 20px -10px rgba(94, 152, 217, 0.3); }
+.rarity-rare { border-bottom: 2px solid #4B69FF; box-shadow: 0 10px 20px -10px rgba(75, 105, 255, 0.3); }
+.rarity-mythical { border-bottom: 2px solid #8847FF; box-shadow: 0 10px 20px -10px rgba(136, 71, 255, 0.3); }
+.rarity-legendary { border-bottom: 2px solid #D32CE6; box-shadow: 0 10px 20px -10px rgba(211, 44, 230, 0.3); }
+.rarity-immortal { border-bottom: 2px solid #E4AE39; box-shadow: 0 10px 20px -10px rgba(228, 174, 57, 0.3); }
+.rarity-arcana { border-bottom: 2px solid #ADE55C; box-shadow: 0 10px 20px -10px rgba(173, 229, 92, 0.3); }
+.rarity-ancient { border-bottom: 2px solid #EB4B4B; box-shadow: 0 10px 20px -10px rgba(235, 75, 75, 0.3); }
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hero-gradient {
+  background: linear-gradient(to bottom, rgba(10,10,10,0) 0%, rgba(10,10,10,1) 100%);
+}
+
+body {
+  background-color: #0A0A0A;
+  color: #e5e2e1;
+  overflow-x: hidden;
+}
+
+/* Dashed placeholder block for future real images */
+.img-placeholder {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03) 10px,
+    rgba(255, 255, 255, 0.06) 10px,
+    rgba(255, 255, 255, 0.06) 20px
+  );
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.steam-button {
+  background: #171a21;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.steam-button:hover {
+  background: #2a2e38;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+.steam-button:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+.google-button {
+  background: #ffffff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.google-button:hover {
+  background: #f1f1f1;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+.google-button:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+.glow-effect {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(184, 31, 12, 0.15) 0%, rgba(184, 31, 12, 0) 70%);
+  pointer-events: none;
+  z-index: -1;
+}
