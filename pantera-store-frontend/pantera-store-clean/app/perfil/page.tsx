@@ -116,7 +116,7 @@ export default function PerfilPage() {
             value={tradeUrl}
             onChange={(e) => setTradeUrl(e.target.value)}
             placeholder="https://steamcommunity.com/tradeoffer/new/..."
-            className="w-full bg-surface-container-lowest border border-white/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors mb-4"
+            className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors mb-4"
           />
           {message && (
             <p className={`text-body-sm mb-4 ${message.type === "error" ? "text-error" : "text-primary"}`}>
@@ -127,7 +127,7 @@ export default function PerfilPage() {
             type="button"
             onClick={handleSave}
             disabled={saving || !tradeUrl.trim()}
-            className="bg-primary-container text-on-primary font-headline-md py-3 px-8 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50"
+            className="bg-primary text-on-primary font-headline-md py-3 px-8 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {saving ? "Guardando..." : "Guardar"}
           </button>

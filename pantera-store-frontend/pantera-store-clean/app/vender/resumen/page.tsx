@@ -14,7 +14,7 @@ const WHATSAPP_NUMBER = "51900000000"; // TODO: reemplazar por el número real d
 
 function ResumenContent() {
   const searchParams = useSearchParams();
-  const idsParam = searchParams.get("items") ?? "";
+  const idsParam = searchParams?.get("items") ?? "";
   const selectedIds = idsParam.split(",").filter(Boolean);
 
   const { user } = useAuth();
@@ -74,7 +74,7 @@ function ResumenContent() {
             <div className="flex items-center gap-4 mb-8">
               <Link
                 href="/inventario"
-                className="p-2 glass-panel rounded-full hover:bg-white/10 transition-colors"
+                className="p-2 glass-panel rounded-full hover:bg-on-surface/10 transition-colors"
               >
                 <span className="material-symbols-outlined align-middle">arrow_back</span>
               </Link>
@@ -109,17 +109,19 @@ function ResumenContent() {
                     key={item.assetId}
                     className={`glass-panel p-4 flex items-center gap-4 ${RARITY_CLASS[item.rarity]} group`}
                   >
-                    <div className="w-20 h-20 bg-surface-container flex-shrink-0 relative overflow-hidden">
+                    <div className="w-20 h-20 bg-surface-container flex-shrink-0 relative overflow-hidden p-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.imageUrl}
                         alt={item.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-contain"
                       />
                     </div>
                     <div className="flex-grow">
                       <span
-                        className={`font-label-caps text-label-caps px-2 py-0.5 mb-1 inline-block bg-white/5 ${RARITY_TEXT_CLASS[item.rarity]}`}
+                        className={`font-label-caps text-label-caps px-2 py-0.5 mb-1 inline-block bg-on-surface/5 ${RARITY_TEXT_CLASS[item.rarity]}`}
                       >
                         {RARITY_LABEL[item.rarity].toUpperCase()}
                       </span>
@@ -145,7 +147,7 @@ function ResumenContent() {
           {/* Confirmación */}
           <div className="lg:col-span-4">
             <div className="glass-panel p-gutter sticky top-24">
-              <h2 className="font-headline-md text-headline-md mb-6 border-b border-white/10 pb-4">
+              <h2 className="font-headline-md text-headline-md mb-6 border-b border-on-surface/10 pb-4">
                 Total a Recibir
               </h2>
               <div className="space-y-4 mb-8">
@@ -157,7 +159,7 @@ function ResumenContent() {
                   <span className="text-on-surface-variant">Comisión de plataforma (0%)</span>
                   <span className="text-rarity-arcana">{formatPEN(0)}</span>
                 </div>
-                <div className="pt-4 border-t border-white/10 flex justify-between items-end">
+                <div className="pt-4 border-t border-on-surface/10 flex justify-between items-end">
                   <span className="font-headline-md text-headline-md">Total Final</span>
                   <span className="font-price-display text-[32px] text-primary">
                     {formatPEN(total)}
@@ -175,7 +177,7 @@ function ResumenContent() {
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
                     placeholder="Tu nombre de usuario"
-                    className="w-full bg-surface-container-lowest border border-white/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-secondary transition-colors"
+                    className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-secondary transition-colors"
                   />
                 </div>
                 <div>
@@ -188,7 +190,7 @@ function ResumenContent() {
                     value={tradeUrl}
                     onChange={(e) => setTradeUrl(e.target.value)}
                     placeholder="https://steamcommunity.com/tradeoffer/new/..."
-                    className="w-full bg-surface-container-lowest border border-white/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-secondary transition-colors"
+                    className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-secondary transition-colors"
                   />
                   <p className="text-[10px] text-on-surface-variant mt-2 px-1">
                     Necesitamos esto para enviarte la oferta de intercambio de forma segura.
@@ -199,7 +201,7 @@ function ResumenContent() {
                   type="button"
                   onClick={handleConfirm}
                   disabled={items.length === 0}
-                  className="w-full bg-primary-container text-on-primary font-headline-md py-5 flex items-center justify-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary-container/20 disabled:opacity-50"
+                  className="w-full bg-primary text-on-primary font-headline-md py-5 flex items-center justify-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined">send</span>
                   Confirmar y enviar por WhatsApp

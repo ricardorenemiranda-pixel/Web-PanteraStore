@@ -3,10 +3,14 @@ import type { ItemCategory, Rarity } from "./mock-data";
 
 export interface AdminItem {
   id: string;
+  /** Código corto para ubicar el item rápido (ej. cuando un cliente escribe por WhatsApp). */
+  referenceCode: string;
   name: string;
   hero?: string;
   category: ItemCategory;
   rarity: Rarity;
+  description?: string;
+  steamMarketHashName?: string;
   marketPrice: number;
   price: number;
   buybackPrice: number;
@@ -19,11 +23,17 @@ export interface AdminItem {
   published: boolean;
 }
 
-export interface WarehouseAccount {
-  id: string;
-  steamId: string;
-  label: string;
-  addedAt: string;
+export interface ItemFormInput {
+  name: string;
+  hero?: string;
+  category: ItemCategory;
+  rarity: Rarity;
+  description?: string;
+  imageUrl?: string;
+  steamMarketHashName?: string;
+  marketPrice: number;
+  stock: number;
+  published: boolean;
 }
 
 export interface AdminOrderLineItem {
@@ -58,7 +68,7 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -82,8 +92,8 @@ export function fetchOrders(): Promise<AdminOrder[]> {
   return request<AdminOrder[]>("/orders");
 }
 
-export function updateItemMarkup(itemId: string, markupPercent: number | null) {
-  return request(`/items/${itemId}/markup`, {
+export function updateItemMarkup(itemId: string, markupPercent: number | null): Promise<AdminItem> {
+  return request<AdminItem>(`/items/${itemId}/markup`, {
     method: "PATCH",
     body: JSON.stringify({ markupPercent }),
   });
@@ -100,6 +110,13 @@ export function syncItemPrice(itemId: string): Promise<AdminItem> {
   return request<AdminItem>(`/items/${itemId}/sync-price`, { method: "PATCH" });
 }
 
+/** Cotiza un item por su nombre exacto de Steam Market, sin que exista todavía en el catálogo. */
+export function fetchSteamQuote(name: string): Promise<{ marketPrice: number | null }> {
+  return request<{ marketPrice: number | null }>(
+    `/items/config/steam-quote?name=${encodeURIComponent(name)}`,
+  );
+}
+
 export function updateItemPrice(itemId: string, price: number | null): Promise<AdminItem> {
   return request<AdminItem>(`/items/${itemId}/price`, {
     method: "PATCH",
@@ -107,27 +124,21 @@ export function updateItemPrice(itemId: string, price: number | null): Promise<A
   });
 }
 
-export function fetchWarehouseAccounts(): Promise<WarehouseAccount[]> {
-  return request<WarehouseAccount[]>("/warehouse/accounts");
+/** Todo el catálogo (publicado o no) — a diferencia de fetchItems(), que solo trae lo público. */
+export function fetchAllItemsAdmin(): Promise<AdminItem[]> {
+  return request<AdminItem[]>("/items/admin");
 }
 
-export function addWarehouseAccount(steamId: string, label: string): Promise<WarehouseAccount> {
-  return request<WarehouseAccount>("/warehouse/accounts", {
-    method: "POST",
-    body: JSON.stringify({ steamId, label }),
-  });
+export function createItem(data: Omit<ItemFormInput, "published">): Promise<AdminItem> {
+  return request<AdminItem>("/items", { method: "POST", body: JSON.stringify(data) });
 }
 
-export function removeWarehouseAccount(id: string) {
-  return request(`/warehouse/accounts/${id}`, { method: "DELETE" });
+export function updateItem(itemId: string, data: Partial<ItemFormInput>): Promise<AdminItem> {
+  return request<AdminItem>(`/items/${itemId}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
-export function syncWarehouseNow() {
-  return request(`/warehouse/sync`, { method: "POST" });
-}
-
-export function fetchPendingItems(): Promise<AdminItem[]> {
-  return request<AdminItem[]>("/warehouse/pending-items");
+export function deleteItem(itemId: string): Promise<{ ok: true }> {
+  return request(`/items/${itemId}`, { method: "DELETE" });
 }
 
 export function publishItem(itemId: string): Promise<AdminItem> {
@@ -154,6 +165,18 @@ export function updateSyncInterval(days: number) {
 
 export function syncPricesNow() {
   return request(`/items/config/sync-now`, { method: "POST" });
+}
+
+export interface SyncStatus {
+  syncing: boolean;
+  processed: number;
+  total: number;
+  waiting: boolean;
+}
+
+/** Se consulta en loop mientras dura la sincronización, para mostrar el % real de avance. */
+export function fetchSyncStatus(): Promise<SyncStatus> {
+  return request<SyncStatus>(`/items/config/sync-status`);
 }
 
 export function approveOrder(orderId: string): Promise<AdminOrder> {

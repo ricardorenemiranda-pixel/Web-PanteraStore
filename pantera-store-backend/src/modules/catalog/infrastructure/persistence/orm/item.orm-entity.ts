@@ -12,8 +12,15 @@ export class ItemOrmEntity {
   @PrimaryColumn({ type: 'varchar' })
   id!: string;
 
-  @Column({ type: 'varchar' })
-  steamMarketHashName!: string;
+  // nullable a nivel de columna para no romper `synchronize` sobre filas ya
+  // existentes (creadas antes de este campo) — en la práctica todo item
+  // siempre tiene uno, asignado por CreateItemUseCase al crearlo, y las
+  // filas viejas se rellenaron con un script de backfill una sola vez.
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  referenceCode!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  steamMarketHashName!: string | null;
 
   @Column({ type: 'varchar' })
   name!: string;
@@ -26,6 +33,9 @@ export class ItemOrmEntity {
 
   @Column({ type: 'varchar' })
   rarity!: Rarity;
+
+  @Column({ type: 'varchar', nullable: true })
+  description!: string | null;
 
   @Column({ type: 'float' })
   marketPrice!: number;
@@ -50,8 +60,7 @@ export class ItemOrmEntity {
 
   // default: true — así los items que ya existían antes de este campo
   // (ya publicados/visibles) no desaparecen del catálogo público al agregar
-  // la columna. Los items nuevos que trae el sync de almacén se crean con
-  // published: false explícito (ver SyncWarehouseCatalogUseCase).
+  // la columna.
   @Column({ type: 'boolean', default: true })
   published!: boolean;
 

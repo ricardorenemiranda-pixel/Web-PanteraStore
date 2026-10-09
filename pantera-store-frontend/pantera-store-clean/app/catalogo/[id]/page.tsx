@@ -4,7 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BottomNav from "@/components/BottomNav";
 import ImagePlaceholder from "@/components/ImagePlaceholder";
-import { RARITY_LABEL, RARITY_BADGE_CLASS, CATEGORY_LABEL } from "@/lib/mock-data";
+import { RARITY_LABEL, RARITY_BADGE_CLASS, RARITY_DOT_CLASS, CATEGORY_LABEL } from "@/lib/mock-data";
 import { formatPEN } from "@/lib/currency";
 import { fetchCatalogItem, fetchCatalogItems, type CatalogItem } from "@/lib/catalogApi";
 
@@ -24,7 +24,7 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
   const available = item.stock > 0;
   const nextAvailableAt = item.pendingHolds[0];
   const waMessage = encodeURIComponent(
-    `Hola PanteraStore, quiero consultar por el item "${item.name}" (${itemSubtitle(item)}) publicado a ${formatPEN(item.price)}.`
+    `Hola PanteraStore, quiero consultar por el item "${item.name}" (código ${item.referenceCode}) publicado a ${formatPEN(item.price)}.`
   );
 
   return (
@@ -34,16 +34,21 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
         <div className="flex flex-col lg:grid lg:grid-cols-12 gap-12 mt-8">
           {/* Imagen y detalles técnicos */}
           <div className="lg:col-span-7 flex flex-col gap-6">
-            <div className="relative aspect-square glass-card rounded-xl flex items-center justify-center p-8 overflow-hidden group">
+            <div
+              style={{ borderRadius: 0 }}
+              className="relative aspect-[128/85] glass-card overflow-hidden group"
+            >
+              <div className={`absolute inset-0 ${RARITY_DOT_CLASS[item.rarity]} opacity-[0.14]`} />
+              <div className="absolute inset-0 bg-surface-container-lowest/70" />
               {item.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={item.imageUrl}
                   alt={item.name}
-                  className="relative z-10 w-full h-full object-contain"
+                  className="absolute inset-0 z-10 w-full h-full object-contain p-2"
                 />
               ) : (
-                <ImagePlaceholder label={item.name} icon="category" className="relative z-10 w-full h-full" />
+                <ImagePlaceholder label={item.name} icon="category" className="absolute inset-0 z-10 w-full h-full" />
               )}
               <div className="absolute bottom-6 left-6 flex gap-2">
                 <span className="bg-secondary/10 text-secondary font-label-caps text-label-caps px-3 py-1 rounded-full border border-secondary/20">
@@ -89,24 +94,27 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
               <h1 className="font-headline-xl text-headline-xl text-on-surface leading-tight mb-2">
                 {item.name}
               </h1>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(233,195,73,0.8)]" />
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-2 h-2 rounded-full bg-secondary" />
                 <span className="text-secondary font-headline-md text-lg tracking-widest">
                   {RARITY_LABEL[item.rarity].toUpperCase()}
+                </span>
+                <span className="figure-nums text-[10px] text-on-surface-variant border border-outline-variant rounded px-3 py-1">
+                  CÓDIGO {item.referenceCode}
                 </span>
               </div>
             </div>
 
-            <div className="bg-surface-container-high p-8 rounded-xl border border-white/5 relative overflow-hidden">
+            <div className="bg-surface-container-high p-8 rounded-xl border border-on-surface/5 relative overflow-hidden">
               <div className="relative z-10">
                 <p className="text-on-surface-variant font-label-caps text-sm mb-1 uppercase">
                   Valor actual de mercado
                 </p>
                 <div className="flex items-baseline gap-2 mb-6">
-                  <span className="font-price-display text-4xl text-on-surface">
+                  <span className="figure-nums text-4xl text-primary">
                     {formatPEN(item.price)}
                   </span>
-                  <span className="text-secondary font-body-sm text-sm">
+                  <span className="figure-nums text-secondary text-sm">
                     ref. Steam: {formatPEN(item.marketPrice)}
                   </span>
                 </div>
@@ -134,14 +142,14 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
                     <button
                       type="button"
                       disabled
-                      className="w-full py-4 bg-white/5 text-on-surface-variant font-headline-md text-headline-md flex items-center justify-center gap-2 rounded cursor-not-allowed"
+                      className="w-full py-4 bg-on-surface/5 text-on-surface-variant font-headline-md text-headline-md flex items-center justify-center gap-2 rounded cursor-not-allowed"
                     >
                       Agotado
                     </button>
                   )}
                   <button
                     type="button"
-                    className="w-full py-4 border border-white/20 hover:border-white/40 hover:bg-white/5 text-on-surface font-headline-md text-headline-md rounded transition-all active:scale-[0.98]"
+                    className="w-full py-4 border border-on-surface/20 hover:border-on-surface/40 hover:bg-on-surface/5 text-on-surface font-headline-md text-headline-md rounded transition-all active:scale-[0.98]"
                   >
                     Agregar a favoritos
                   </button>
@@ -156,7 +164,7 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
             </div>
 
             <div className="space-y-6">
-              <div className="border-b border-white/10 pb-2">
+              <div className="border-b border-on-surface/10 pb-2">
                 <h3 className="font-headline-md text-headline-md text-on-surface">
                   Descripción del Item
                 </h3>
@@ -196,7 +204,7 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
                   <div
                     key={idx}
                     className={`flex-1 rounded-t transition-all cursor-help ${
-                      idx === 5 ? "bg-secondary hover:brightness-110" : "bg-white/10 hover:bg-secondary/50"
+                      idx === 5 ? "bg-secondary hover:brightness-110" : "bg-on-surface/10 hover:bg-secondary/50"
                     }`}
                     style={{ height: `${h}%` }}
                   />
@@ -209,37 +217,32 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
         {/* Piezas del set (solo si el ítem es un set abierto) */}
         {item.setPieces.length > 0 && (
           <section className="mt-24">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <p className="text-secondary font-label-caps text-xs mb-2">SET COMPLETO</p>
-                <h2 className="font-headline-lg text-headline-lg">Piezas de este set</h2>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <h2 className="font-headline-lg text-headline-lg mb-8">Piezas de este set</h2>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
               {item.setPieces.map((piece) => (
-                <div
-                  key={piece.slot}
-                  className="bg-surface-container rounded-lg border border-white/5 overflow-hidden"
-                >
-                  <div className="aspect-square p-4 flex items-center justify-center relative">
+                <div key={piece.slot} style={{ borderRadius: 0 }} className="surface-card overflow-hidden">
+                  <div className="aspect-[128/85] relative bg-surface-container-lowest/70">
+                    <div className={`absolute inset-0 ${RARITY_DOT_CLASS[item.rarity]} opacity-[0.14]`} />
                     {piece.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={piece.imageUrl}
                         alt={piece.name}
-                        className="w-full h-full object-contain"
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 w-full h-full object-contain p-2"
                       />
                     ) : (
-                      <ImagePlaceholder label={piece.name} className="w-full h-full" />
+                      <ImagePlaceholder label={piece.name} className="absolute inset-0 w-full h-full" />
                     )}
                   </div>
-                  <div className="p-4 border-t border-white/5">
+                  <div className="p-4">
                     <p className="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">
                       {piece.slot}
                     </p>
                     <div className="flex justify-between items-center">
                       <span className="font-headline-md text-sm truncate pr-2">{piece.name}</span>
-                      <span className="font-price-display text-sm">{formatPEN(piece.price)}</span>
+                      <span className="figure-nums text-sm text-on-surface">{formatPEN(piece.price)}</span>
                     </div>
                   </div>
                 </div>
@@ -250,25 +253,28 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
 
         {/* Relacionados */}
         <section className="mt-24">
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <p className="text-secondary font-label-caps text-xs mb-2">SELECCIÓN DE COLECCIONISTAS</p>
-              <h2 className="font-headline-lg text-headline-lg">También te puede interesar</h2>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <h2 className="font-headline-lg text-headline-lg mb-8">También te puede interesar</h2>
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
             {related.map((r) => (
               <Link
                 key={r.id}
                 href={`/catalogo/${r.id}`}
-                className="bg-surface-container rounded-lg border border-white/5 hover:border-primary/30 transition-all group cursor-pointer overflow-hidden"
+                style={{ borderRadius: 0 }}
+                className="surface-card group overflow-hidden"
               >
-                <div className="aspect-square p-4 flex items-center justify-center relative">
+                <div className="aspect-[128/85] relative bg-surface-container-lowest/70">
+                  <div className={`absolute inset-0 ${RARITY_DOT_CLASS[r.rarity]} opacity-[0.14]`} />
                   {r.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.imageUrl} alt={r.name} className="w-full h-full object-contain" />
+                    <img
+                      src={r.imageUrl}
+                      alt={r.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 w-full h-full object-contain p-2"
+                    />
                   ) : (
-                    <ImagePlaceholder label={r.name} className="w-full h-full" />
+                    <ImagePlaceholder label={r.name} className="absolute inset-0 w-full h-full" />
                   )}
                   <div
                     className={`absolute top-2 right-2 text-[8px] font-bold px-2 py-0.5 rounded uppercase ${RARITY_BADGE_CLASS[r.rarity]}`}
@@ -276,13 +282,13 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
                     {RARITY_LABEL[r.rarity]}
                   </div>
                 </div>
-                <div className="p-4 border-t border-white/5">
+                <div className="p-4">
                   <p className="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">
                     {itemSubtitle(r)}
                   </p>
                   <div className="flex justify-between items-center">
                     <span className="font-headline-md text-sm truncate pr-2">{r.name}</span>
-                    <span className="font-price-display text-sm">{formatPEN(r.price)}</span>
+                    <span className="figure-nums text-sm text-on-surface">{formatPEN(r.price)}</span>
                   </div>
                 </div>
               </Link>

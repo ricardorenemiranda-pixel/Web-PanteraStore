@@ -35,7 +35,7 @@ export default function LoginPage() {
         <div className="glow-effect top-1/4 left-1/4 blur-3xl opacity-20" />
         <div className="glow-effect bottom-1/4 right-1/4 blur-3xl opacity-20" />
         <div className="w-full max-w-md">
-          <div className="glass-panel p-10 md:p-12 flex flex-col items-center text-center rounded-xl shadow-2xl relative overflow-hidden">
+          <div className="glass-panel p-10 md:p-12 flex flex-col items-center text-center rounded-xl relative overflow-hidden">
             <div className="mb-10 group cursor-default">
               <span className="font-headline-xl text-headline-xl font-extrabold text-primary tracking-tighter block leading-none">
                 PANTERASTORE
@@ -58,7 +58,7 @@ export default function LoginPage() {
                 placeholder="Correo electrónico"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-surface-container-lowest border border-white/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors"
+                className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors"
               />
               <input
                 type="password"
@@ -66,7 +66,7 @@ export default function LoginPage() {
                 placeholder="Contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-surface-container-lowest border border-white/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors"
+                className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg p-4 font-body-sm focus:outline-none focus:border-primary transition-colors"
               />
               {error && <p className="text-error font-body-sm">{error}</p>}
               <button
@@ -85,11 +85,11 @@ export default function LoginPage() {
             </form>
 
             <div className="w-full flex items-center gap-4 mb-6">
-              <div className="h-px flex-grow bg-white/10" />
+              <div className="h-px flex-grow bg-on-surface/10" />
               <span className="font-label-caps text-label-caps text-on-surface-variant/50 uppercase tracking-widest">
                 o
               </span>
-              <div className="h-px flex-grow bg-white/10" />
+              <div className="h-px flex-grow bg-on-surface/10" />
             </div>
 
             <div className="w-full flex flex-col gap-4">

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   STEAM_MARKET_RAW_GATEWAY,
+  SteamRateLimitedException,
   type SteamMarketGateway,
 } from '../../domain/ports/steam-market.port';
 import {
@@ -31,8 +32,15 @@ export class CachedSteamMarketGateway implements SteamMarketGateway {
       return cached.price;
     }
 
-    const price = await this.httpGateway.getLowestPrice(marketHashName);
-    await this.cache.set(marketHashName, price);
-    return price;
+    try {
+      const price = await this.httpGateway.getLowestPrice(marketHashName);
+      await this.cache.set(marketHashName, price);
+      return price;
+    } catch (error) {
+      // Rate limit: se responde "sin precio por ahora" pero NO se guarda en la
+      // caché, así el próximo sync sí lo intenta en vez de quedar en null.
+      if (error instanceof SteamRateLimitedException) return null;
+      throw error;
+    }
   }
 }

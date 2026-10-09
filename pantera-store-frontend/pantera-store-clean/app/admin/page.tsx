@@ -2,41 +2,33 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import ImagePlaceholder from "@/components/ImagePlaceholder";
+import { useRouter } from "next/navigation";
+import AdminItemCard from "@/components/AdminItemCard";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PdfExportModal from "@/components/PdfExportModal";
 import { useAuth } from "@/lib/AuthContext";
 import {
-  addWarehouseAccount,
   AdminItem,
   AdminOrder,
   approveOrder,
-  fetchItems,
+  deleteItem,
+  fetchAllItemsAdmin,
   fetchOrders,
-  fetchPendingItems,
   fetchPricingConfig,
-  fetchWarehouseAccounts,
+  fetchSyncStatus,
   PricingConfig,
-  publishItem,
   rejectOrder,
-  removeWarehouseAccount,
   SellableRarity,
-  syncItemPrice,
   syncPricesNow,
-  syncWarehouseNow,
-  updateGlobalMarkup,
-  updateItemMarkup,
-  updateItemPrice,
   updateRarityMarkup,
-  updateSyncInterval,
-  WarehouseAccount,
 } from "@/lib/adminApi";
 import { ALL_HERO_NAMES, CATEGORY_LABEL, ItemCategory, RARITY_LABEL, Rarity } from "@/lib/mock-data";
 import { formatPEN } from "@/lib/currency";
 
-type Tab = "prices" | "warehouse" | "orders" | "analytics";
+type Tab = "catalog" | "orders" | "analytics";
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABEL) as ItemCategory[];
-// Solo las rarezas que la empresa compra/vende — mismo criterio que el filtro público de /catalogo.
-const FILTERABLE_RARITIES: Rarity[] = ["mythical", "legendary", "immortal", "arcana"];
+const ALL_RARITIES = Object.keys(RARITY_LABEL) as Rarity[];
 
 const statusLabel: Record<AdminOrder["status"], string> = {
   pendiente: "Pendiente",
@@ -45,11 +37,21 @@ const statusLabel: Record<AdminOrder["status"], string> = {
 };
 const statusClass: Record<AdminOrder["status"], string> = {
   pendiente: "bg-secondary/10 text-secondary border border-secondary/20",
-  procesado: "bg-surface-container-highest text-on-surface-variant border border-white/10",
+  procesado: "bg-surface-container-highest text-on-surface-variant border border-on-surface/10",
   rechazado: "bg-error/10 text-error border border-error/20",
 };
 
 const SELLABLE_RARITIES: SellableRarity[] = ["mythical", "legendary", "immortal", "arcana"];
+
+const RARITY_DOT_CLASS: Record<SellableRarity, string> = {
+  mythical: "bg-rarity-mythical",
+  legendary: "bg-rarity-legendary",
+  immortal: "bg-rarity-immortal",
+  arcana: "bg-rarity-arcana",
+};
+
+/** Precio de referencia para el ejemplo en vivo junto a cada % de markup. */
+const MARKUP_PREVIEW_PRICE = 10;
 
 function emptyRarityInputs(): Record<SellableRarity, string> {
   return { mythical: "", legendary: "", immortal: "", arcana: "" };
@@ -57,255 +59,210 @@ function emptyRarityInputs(): Record<SellableRarity, string> {
 
 export default function AdminPage() {
   const { user, loading: userLoading } = useAuth();
-  const [tab, setTab] = useState<Tab>("prices");
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>("catalog");
 
   const [items, setItems] = useState<AdminItem[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState("");
-  const [globalMarkupInput, setGlobalMarkupInput] = useState("");
-  const [syncingId, setSyncingId] = useState<string | null>(null);
   const [config, setConfig] = useState<PricingConfig | null>(null);
   const [rarityInputs, setRarityInputs] = useState<Record<SellableRarity, string>>(emptyRarityInputs());
-  const [syncIntervalInput, setSyncIntervalInput] = useState("");
   const [savingRarity, setSavingRarity] = useState<SellableRarity | null>(null);
-  const [savingInterval, setSavingInterval] = useState(false);
   const [syncingNow, setSyncingNow] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncWaiting, setSyncWaiting] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
-  const [accounts, setAccounts] = useState<WarehouseAccount[]>([]);
-  const [newAccountSteamId, setNewAccountSteamId] = useState("");
-  const [newAccountLabel, setNewAccountLabel] = useState("");
-  const [addingAccount, setAddingAccount] = useState(false);
-  const [removingAccountId, setRemovingAccountId] = useState<string | null>(null);
-  const [syncingWarehouse, setSyncingWarehouse] = useState(false);
-  const [warehouseMessage, setWarehouseMessage] = useState("");
-  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
-  const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
-  const [unpublishedItems, setUnpublishedItems] = useState<AdminItem[]>([]);
-  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterHero, setFilterHero] = useState("");
   const [filterCategory, setFilterCategory] = useState<ItemCategory | "">("");
   const [filterRarity, setFilterRarity] = useState<Rarity | "">("");
+  const [searchCode, setSearchCode] = useState("");
+  const [filterCustomMarkup, setFilterCustomMarkup] = useState(false);
+
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    danger?: boolean;
+    action: () => Promise<void> | void;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const isAdmin = user?.role === "admin";
+
+  function askConfirm(message: string, action: () => Promise<void> | void, danger = false) {
+    setConfirmDialog({ message, action, danger });
+  }
+
+  async function handleConfirmAccept() {
+    if (!confirmDialog) return;
+    setConfirmLoading(true);
+    try {
+      await confirmDialog.action();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmDialog(null);
+    }
+  }
+
+  function handleConfirmCancel() {
+    setConfirmDialog(null);
+  }
 
   useEffect(() => {
     if (!isAdmin) return;
     setDataLoading(true);
-    Promise.all([
-      fetchItems(),
-      fetchOrders(),
-      fetchPricingConfig(),
-      fetchWarehouseAccounts(),
-      fetchPendingItems(),
-    ])
-      .then(([itemsData, ordersData, configData, accountsData, pendingData]) => {
+    Promise.all([fetchAllItemsAdmin(), fetchOrders(), fetchPricingConfig()])
+      .then(([itemsData, ordersData, configData]) => {
         setItems(itemsData);
         setOrders(ordersData);
         setConfig(configData);
-        setAccounts(accountsData);
-        setUnpublishedItems(pendingData);
         setRarityInputs({
           mythical: configData.rarityMarkups.mythical?.toString() ?? "",
           legendary: configData.rarityMarkups.legendary?.toString() ?? "",
           immortal: configData.rarityMarkups.immortal?.toString() ?? "",
           arcana: configData.rarityMarkups.arcana?.toString() ?? "",
         });
-        setSyncIntervalInput(configData.syncIntervalDays.toString());
       })
       .catch(() => setError("No pudimos cargar los datos del panel."))
       .finally(() => setDataLoading(false));
   }, [isAdmin]);
 
-  async function handleAddAccount(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newAccountSteamId.trim() || !newAccountLabel.trim()) return;
-    setAddingAccount(true);
-    try {
-      const account = await addWarehouseAccount(newAccountSteamId.trim(), newAccountLabel.trim());
-      setAccounts((prev) => [...prev, account]);
-      setNewAccountSteamId("");
-      setNewAccountLabel("");
-    } catch {
-      setError("No se pudo agregar la cuenta (revisa que el SteamID64 sea válido).");
-    } finally {
-      setAddingAccount(false);
-    }
+  function handleDeleteItem(itemId: string, name: string) {
+    askConfirm(
+      `¿Eliminar "${name}" del catálogo? Esta acción no se puede deshacer.`,
+      async () => {
+        setDeletingId(itemId);
+        try {
+          await deleteItem(itemId);
+          setItems((prev) => prev.filter((i) => i.id !== itemId));
+        } catch {
+          setError("No se pudo eliminar el item.");
+        } finally {
+          setDeletingId(null);
+        }
+      },
+      true,
+    );
   }
 
-  async function handleRemoveAccount(id: string) {
-    setRemovingAccountId(id);
-    try {
-      await removeWarehouseAccount(id);
-      setAccounts((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      setError("No se pudo quitar la cuenta.");
-    } finally {
-      setRemovingAccountId(null);
-    }
-  }
-
-  async function handleSyncWarehouse() {
-    setSyncingWarehouse(true);
-    setWarehouseMessage("");
-    try {
-      await syncWarehouseNow();
-      setWarehouseMessage("Sincronización de almacén disparada — el catálogo se irá actualizando.");
-      const [refreshedItems, refreshedPending] = await Promise.all([fetchItems(), fetchPendingItems()]);
-      setItems(refreshedItems);
-      setUnpublishedItems(refreshedPending);
-    } catch {
-      setError("No se pudo sincronizar el almacén.");
-    } finally {
-      setSyncingWarehouse(false);
-    }
-  }
-
-  /** El item puede estar en la lista de publicados o en la de pendientes — actualiza la que corresponda. */
-  function applyItemUpdate(updated: AdminItem) {
-    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-    setUnpublishedItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-  }
-
-  async function handlePriceSave(itemId: string) {
-    const raw = priceInputs[itemId];
-    const price = raw === undefined || raw.trim() === "" ? null : Number(raw);
-    if (price !== null && Number.isNaN(price)) return;
-    setSavingPriceId(itemId);
-    try {
-      const updated = await updateItemPrice(itemId, price);
-      applyItemUpdate(updated);
-    } catch {
-      setError("No se pudo actualizar el precio de ese item.");
-    } finally {
-      setSavingPriceId(null);
-    }
-  }
-
-  async function handleConsultPrice(itemId: string) {
-    setSyncingId(itemId);
-    try {
-      const updated = await syncItemPrice(itemId);
-      applyItemUpdate(updated);
-    } catch {
-      setError("No se pudo consultar el precio en Steam Market.");
-    } finally {
-      setSyncingId(null);
-    }
-  }
-
-  async function handlePublish(itemId: string) {
-    setPublishingId(itemId);
-    try {
-      const updated = await publishItem(itemId);
-      setUnpublishedItems((prev) => prev.filter((i) => i.id !== itemId));
-      setItems((prev) => [...prev, updated]);
-    } catch {
-      setError("No se pudo publicar el item.");
-    } finally {
-      setPublishingId(null);
-    }
-  }
-
-  const filteredWarehouseItems = useMemo(() => {
+  const filteredCatalogItems = useMemo(() => {
     return items.filter((item) => {
-      // Solo se gestionan acá las rarezas que la empresa realmente vende —
-      // mismo criterio que el catálogo público. Los cofres/sets (categoría
-      // "treasure") se muestran sin importar su rareza (la mayoría son "Rare").
-      if (!FILTERABLE_RARITIES.includes(item.rarity) && item.category !== "treasure") return false;
+      if (searchCode && !item.referenceCode.includes(searchCode.trim())) return false;
       if (filterHero && item.hero !== filterHero) return false;
       if (filterCategory && item.category !== filterCategory) return false;
       if (filterRarity && item.rarity !== filterRarity) return false;
+      if (filterCustomMarkup && item.markupPercentOverride === null) return false;
       return true;
     });
-  }, [items, filterHero, filterCategory, filterRarity]);
+  }, [items, searchCode, filterHero, filterCategory, filterRarity, filterCustomMarkup]);
 
-  const recentPendingItems = useMemo(
-    () => items.filter((item) => item.pendingHolds.length > 0),
+  const customMarkupCount = useMemo(
+    () => items.filter((item) => item.markupPercentOverride !== null).length,
     [items],
   );
 
-  async function handleRarityMarkupSave(rarity: SellableRarity) {
+  function clearFilters() {
+    setSearchCode("");
+    setFilterHero("");
+    setFilterCategory("");
+    setFilterRarity("");
+    setFilterCustomMarkup(false);
+  }
+
+  function goToCustomMarkupItems() {
+    setSearchCode("");
+    setFilterHero("");
+    setFilterCategory("");
+    setFilterRarity("");
+    setFilterCustomMarkup(true);
+  }
+
+  function handleRarityMarkupSave(rarity: SellableRarity) {
     const raw = rarityInputs[rarity];
     const percent = raw.trim() === "" ? null : Number(raw);
     if (percent !== null && Number.isNaN(percent)) return;
-    setSavingRarity(rarity);
-    try {
-      await updateRarityMarkup(rarity, percent);
-      setConfig((prev) => (prev ? { ...prev, rarityMarkups: { ...prev.rarityMarkups, [rarity]: percent } } : prev));
-    } catch {
-      setError(`No se pudo actualizar el markup de ${RARITY_LABEL[rarity]}.`);
-    } finally {
-      setSavingRarity(null);
-    }
+
+    const itemsOfRarity = items.filter((i) => i.rarity === rarity);
+    const affected = itemsOfRarity.filter((i) => i.markupPercentOverride === null);
+    const customInRarity = itemsOfRarity.length - affected.length;
+    const rarityLabel = RARITY_LABEL[rarity];
+
+    const message =
+      percent === null
+        ? `¿Quitar el markup fijo de ${rarityLabel}? Los ${affected.length} item${affected.length === 1 ? "" : "s"} de esa rareza volverán a usar el markup global.`
+        : `¿Aplicar ${percent}% de markup a los ${affected.length} item${affected.length === 1 ? "" : "s"} de rareza ${rarityLabel}?` +
+          (customInRarity > 0
+            ? `\n\nLos ${customInRarity} item${customInRarity === 1 ? "" : "s"} de ${rarityLabel} con markup personalizado no se verán afectados.`
+            : "");
+
+    askConfirm(message, async () => {
+      setSavingRarity(rarity);
+      try {
+        await updateRarityMarkup(rarity, percent);
+        setConfig((prev) => (prev ? { ...prev, rarityMarkups: { ...prev.rarityMarkups, [rarity]: percent } } : prev));
+        const refreshed = await fetchAllItemsAdmin();
+        setItems(refreshed);
+      } catch {
+        setError(`No se pudo actualizar el markup de ${rarityLabel}.`);
+      } finally {
+        setSavingRarity(null);
+      }
+    });
   }
 
-  async function handleSyncIntervalSave() {
-    const days = Number(syncIntervalInput);
-    if (Number.isNaN(days) || days < 1) return;
-    setSavingInterval(true);
+  // Sigue el avance real de la sincronización hasta que termine, sin límite
+  // de tiempo: si Steam bloquea, el backend espera y reanuda solo, y acá la
+  // barra simplemente queda quieta ("Esperando a Steam") sin mostrar error.
+  async function watchSync() {
+    setSyncingNow(true);
+    setSyncMessage("");
     try {
-      await updateSyncInterval(days);
-      setConfig((prev) => (prev ? { ...prev, syncIntervalDays: days } : prev));
-    } catch {
-      setError("No se pudo actualizar el intervalo de sincronización.");
+      let syncing = true;
+      while (syncing) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const status = await fetchSyncStatus();
+          syncing = status.syncing;
+          setSyncWaiting(status.waiting);
+          setSyncProgress(status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0);
+        } catch {
+          // Un fallo puntual de red no interrumpe el seguimiento; se reintenta.
+        }
+      }
+      const refreshed = await fetchAllItemsAdmin();
+      setItems(refreshed);
+      setSyncMessage("Precios sincronizados correctamente.");
     } finally {
-      setSavingInterval(false);
+      setSyncingNow(false);
+      setSyncWaiting(false);
+      setSyncProgress(0);
     }
   }
 
   async function handleSyncNow() {
-    setSyncingNow(true);
-    setSyncMessage("");
+    setSyncProgress(0);
     try {
       await syncPricesNow();
-      setSyncMessage("Sincronización disparada — los precios se irán actualizando en segundo plano.");
-      const refreshed = await fetchItems();
-      setItems(refreshed);
     } catch {
-      setError("No se pudo disparar la sincronización.");
-    } finally {
-      setSyncingNow(false);
+      setError("No se pudo iniciar la sincronización de precios.");
+      return;
     }
+    await watchSync();
   }
 
-  async function handleMarkupChange(itemId: string, value: string) {
-    const percent = value === "" ? null : Number(value);
-    setItems((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, markupPercentOverride: percent } : item))
-    );
-    if (percent === null || Number.isNaN(percent)) return;
-    try {
-      await updateItemMarkup(itemId, percent);
-    } catch {
-      setError(`No se pudo actualizar el markup de ese item.`);
-    }
-  }
-
-  async function handleSyncPrice(itemId: string) {
-    setSyncingId(itemId);
-    try {
-      const updated = await syncItemPrice(itemId);
-      setItems((prev) => prev.map((item) => (item.id === itemId ? updated : item)));
-    } catch {
-      setError("No se pudo sincronizar el precio con Steam Market.");
-    } finally {
-      setSyncingId(null);
-    }
-  }
-
-  async function handleGlobalMarkup() {
-    const percent = Number(globalMarkupInput);
-    if (Number.isNaN(percent)) return;
-    try {
-      await updateGlobalMarkup(percent);
-      const refreshed = await fetchItems();
-      setItems(refreshed);
-    } catch {
-      setError("No se pudo actualizar el markup global.");
-    }
-  }
+  // Si se recarga la página con una sincronización en curso, se retoma el seguimiento.
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchSyncStatus()
+      .then((status) => {
+        if (status.syncing) void watchSync();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   async function handleOrderAction(orderId: string, action: "approve" | "reject") {
     try {
@@ -317,11 +274,6 @@ export default function AdminPage() {
   }
 
   const pendingCount = orders.filter((o) => o.status === "pendiente").length;
-  const catalogValue = items.reduce((sum, item) => sum + item.price, 0);
-  const avgMarkup =
-    items.length === 0
-      ? 0
-      : items.reduce((sum, item) => sum + (item.price / item.marketPrice - 1) * 100, 0) / items.length;
 
   if (userLoading) {
     return <div className="min-h-screen bg-background" />;
@@ -354,63 +306,48 @@ export default function AdminPage() {
 
   return (
     <div className="bg-background text-on-background font-body-md selection:bg-primary selection:text-on-primary">
-      {/* Header simple de admin */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-2xl">
-        <Link
-          href="/"
-          className="font-headline-md text-headline-md font-bold text-primary tracking-tighter"
-        >
-          PANTERASTORE
-        </Link>
-        <div className="flex items-center gap-base">
-          <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-            Modo Administrador · {user.displayName}
-          </span>
-        </div>
-      </header>
+      {/* Header + navegación de admin, fijos arriba */}
+      <div className="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-on-surface/10">
+        <header className="flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16">
+          <Link
+            href="/"
+            className="font-headline-md text-headline-md font-bold text-primary tracking-tighter"
+          >
+            PANTERASTORE
+          </Link>
+          <div className="flex items-center gap-base">
+            <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+              Modo Administrador · {user.displayName}
+            </span>
+          </div>
+        </header>
+
+        <nav className="h-12 flex items-center gap-1 px-margin-mobile md:px-margin-desktop border-t border-on-surface/5 overflow-x-auto">
+          {[
+            { id: "catalog" as Tab, label: "Catálogo", icon: "inventory_2" },
+            { id: "orders" as Tab, label: "Órdenes", icon: "shopping_cart" },
+            { id: "analytics" as Tab, label: "Analítica", icon: "analytics" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={
+                tab === t.id
+                  ? "h-full flex items-center gap-2 px-4 text-secondary border-b-2 border-secondary transition-all duration-150 shrink-0"
+                  : "h-full flex items-center gap-2 px-4 text-on-surface-variant border-b-2 border-transparent hover:text-on-surface hover:bg-on-surface/5 transition-colors shrink-0"
+              }
+            >
+              <span className="material-symbols-outlined text-lg">{t.icon}</span>
+              <span className="font-label-caps text-label-caps uppercase">{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
 
       <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden lg:flex flex-col h-full w-64 fixed left-0 pt-20 bg-surface-container border-r border-white/5">
-          <div className="px-6 py-4 border-b border-white/5 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center border border-white/10">
-                <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
-              </div>
-              <div>
-                <h3 className="font-headline-sm text-headline-sm text-primary">Panel Admin</h3>
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label-caps">
-                  Gestión de Mercado
-                </p>
-              </div>
-            </div>
-          </div>
-          <nav className="flex flex-col">
-            {[
-              { id: "prices" as Tab, label: "Precios", icon: "payments" },
-              { id: "warehouse" as Tab, label: "Almacén", icon: "inventory_2" },
-              { id: "orders" as Tab, label: "Órdenes", icon: "shopping_cart" },
-              { id: "analytics" as Tab, label: "Analítica", icon: "analytics" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={
-                  tab === t.id
-                    ? "group flex items-center gap-3 px-6 py-4 text-secondary border-r-2 border-secondary bg-secondary/5 transition-all duration-150"
-                    : "group flex items-center gap-3 px-6 py-4 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
-                }
-              >
-                <span className="material-symbols-outlined">{t.icon}</span>
-                <span className="font-label-caps text-label-caps uppercase">{t.label}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
         {/* Contenido */}
-        <main className="flex-1 lg:pl-64 pt-16 pb-24 lg:pb-0 min-h-screen bg-surface">
-          <div className="max-w-7xl mx-auto px-margin-mobile md:px-margin-desktop py-12">
+        <main className="flex-1 pt-28 pb-24 min-h-screen bg-surface">
+          <div className="max-w-[1600px] mx-auto px-margin-mobile md:px-margin-desktop py-12">
             {error && (
               <div className="mb-6 bg-error/10 border border-error/20 text-error px-4 py-3 text-body-sm">
                 {error}
@@ -419,596 +356,261 @@ export default function AdminPage() {
 
             {dataLoading && <p className="text-on-surface-variant">Cargando...</p>}
 
-            {!dataLoading && tab === "prices" && (
+            {!dataLoading && tab === "catalog" && (
               <section className="space-y-gutter">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                   <div>
                     <h1 className="font-headline-lg text-headline-lg text-on-surface">
-                      Gestión de Precios
+                      Catálogo y Precios
                     </h1>
                     <p className="font-body-md text-on-surface-variant">
-                      Configura el margen sobre cada item y monitorea el valor del catálogo.
+                      Administra tus items, sus precios y el margen de la tienda en un solo lugar.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <input
-                      className="bg-surface-container-low border border-white/10 text-on-surface font-body-sm py-2 px-3 w-24"
-                      type="number"
-                      step="0.1"
-                      placeholder="Markup %"
-                      value={globalMarkupInput}
-                      onChange={(e) => setGlobalMarkupInput(e.target.value)}
-                    />
                     <button
-                      onClick={handleGlobalMarkup}
-                      className="bg-secondary text-on-secondary px-4 py-2 font-label-caps text-label-caps hover:brightness-110 transition-all"
+                      onClick={() => setPdfModalOpen(true)}
+                      className="flex items-center gap-2 bg-secondary text-on-secondary px-4 py-2 font-label-caps text-label-caps hover:brightness-110 transition-all"
                     >
-                      Aplicar markup global
+                      <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
+                      Exportar PDF
                     </button>
+                    <Link
+                      href="/admin/items/new"
+                      className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 font-label-caps text-label-caps hover:brightness-110 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-sm">add</span>
+                      Nuevo item
+                    </Link>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
-                  <div className="glass-panel p-6 flex flex-col justify-between">
-                    <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                      Margen Promedio
-                    </span>
-                    <div className="mt-4 flex items-baseline gap-2">
-                      <span className="font-headline-xl text-headline-xl text-secondary">
-                        {avgMarkup.toFixed(1)}%
-                      </span>
-                      <span className="text-on-surface-variant font-body-sm">en todo el catálogo</span>
-                    </div>
-                  </div>
-                  <div className="glass-panel p-6 flex flex-col justify-between">
-                    <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                      Valor del Catálogo
-                    </span>
-                    <div className="mt-4 flex items-baseline gap-2">
-                      <span className="font-headline-xl text-headline-xl text-on-surface">
-                        {formatPEN(catalogValue)}
-                      </span>
-                      <span className="text-on-surface-variant font-body-sm">potencial total</span>
-                    </div>
-                  </div>
-                  <div className="glass-panel p-6 flex flex-col justify-between border-l-4 border-l-primary">
-                    <span className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                      Estado de la API
-                    </span>
-                    <div className="mt-4 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      <span className="font-headline-md text-headline-md text-primary">En vivo</span>
-                    </div>
-                  </div>
-                </div>
-
-                {config && (
-                  <div className="glass-panel p-6">
-                    <h2 className="font-headline-md text-headline-md text-on-surface mb-1">
-                      Sincronización con Steam Market
-                    </h2>
-                    <p className="font-body-sm text-on-surface-variant mb-6">
-                      La empresa controla cada cuánto se le pide precios a Steam — mientras tanto, todos
-                      los usuarios comparten el mismo precio ya guardado. Nunca se le pega a Steam en el
-                      camino de un usuario navegando.
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter mb-6">
-                      {SELLABLE_RARITIES.map((rarity) => (
-                        <div key={rarity} className="flex items-center gap-2">
-                          <label className="font-label-caps text-label-caps text-on-surface-variant uppercase w-24 shrink-0">
-                            {RARITY_LABEL[rarity]}
-                          </label>
-                          <input
-                            className="bg-surface border border-white/10 text-on-surface font-body-sm w-24 py-2 px-3 focus:ring-1 focus:ring-secondary focus:outline-none"
-                            type="number"
-                            step="0.1"
-                            placeholder="global"
-                            value={rarityInputs[rarity]}
-                            onChange={(e) =>
-                              setRarityInputs((prev) => ({ ...prev, [rarity]: e.target.value }))
-                            }
-                          />
-                          <button
-                            onClick={() => handleRarityMarkupSave(rarity)}
-                            disabled={savingRarity === rarity}
-                            className="bg-secondary text-on-secondary px-3 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                          >
-                            {savingRarity === rarity ? "..." : "Guardar"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-white/10">
-                      <div className="flex items-center gap-2">
-                        <label className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                          Sincronizar cada
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-gutter items-start">
+                  {/* Catálogo: filtros + grilla de items (columna principal) */}
+                  <div className="xl:col-span-3 flex flex-col gap-gutter">
+                    <div className="bg-surface-container border border-on-surface/5 p-4 flex flex-col md:flex-row md:items-end gap-4">
+                      <div className="flex-1 w-full">
+                        <label className="block font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">
+                          Código
                         </label>
                         <input
-                          className="bg-surface border border-white/10 text-on-surface font-body-sm w-16 py-2 px-3 focus:ring-1 focus:ring-secondary focus:outline-none"
-                          type="number"
-                          min={1}
-                          value={syncIntervalInput}
-                          onChange={(e) => setSyncIntervalInput(e.target.value)}
+                          type="text"
+                          value={searchCode}
+                          onChange={(e) => setSearchCode(e.target.value)}
+                          className="w-full bg-surface border border-on-surface/10 text-on-surface font-body-sm py-2 px-3"
                         />
-                        <span className="font-body-sm text-on-surface-variant">días</span>
-                        <button
-                          onClick={handleSyncIntervalSave}
-                          disabled={savingInterval}
-                          className="bg-secondary text-on-secondary px-3 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                        >
-                          {savingInterval ? "..." : "Guardar"}
-                        </button>
                       </div>
-
-                      <button
-                        onClick={handleSyncNow}
-                        disabled={syncingNow}
-                        className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                      >
-                        <span className={`material-symbols-outlined text-sm ${syncingNow ? "animate-spin" : ""}`}>
-                          sync
-                        </span>
-                        {syncingNow ? "Sincronizando..." : "Sincronizar ahora"}
-                      </button>
-
-                      {config.lastFullSyncAt && (
-                        <span className="font-body-sm text-on-surface-variant">
-                          Último sync: {new Date(config.lastFullSyncAt).toLocaleString("es-PE")}
-                        </span>
+                      <div className="flex-1 w-full">
+                        <label className="block font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">
+                          Héroe
+                        </label>
+                        <select
+                          value={filterHero}
+                          onChange={(e) => setFilterHero(e.target.value)}
+                          className="w-full bg-surface border border-on-surface/10 text-on-surface font-body-sm py-2 px-3"
+                        >
+                          <option value="">Todos</option>
+                          {ALL_HERO_NAMES.map((hero) => (
+                            <option key={hero} value={hero}>
+                              {hero}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1 w-full">
+                        <label className="block font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">
+                          Categoría
+                        </label>
+                        <select
+                          value={filterCategory}
+                          onChange={(e) => setFilterCategory(e.target.value as ItemCategory | "")}
+                          className="w-full bg-surface border border-on-surface/10 text-on-surface font-body-sm py-2 px-3"
+                        >
+                          <option value="">Todas</option>
+                          {ALL_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {CATEGORY_LABEL[category]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1 w-full">
+                        <label className="block font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">
+                          Rareza
+                        </label>
+                        <select
+                          value={filterRarity}
+                          onChange={(e) => setFilterRarity(e.target.value as Rarity | "")}
+                          className="w-full bg-surface border border-on-surface/10 text-on-surface font-body-sm py-2 px-3"
+                        >
+                          <option value="">Todas</option>
+                          {ALL_RARITIES.map((rarity) => (
+                            <option key={rarity} value={rarity}>
+                              {RARITY_LABEL[rarity]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {(searchCode || filterHero || filterCategory || filterRarity || filterCustomMarkup) && (
+                        <button
+                          onClick={clearFilters}
+                          className="w-full md:w-auto px-4 py-2 font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">clear</span>
+                          Limpiar
+                        </button>
                       )}
                     </div>
 
-                    {syncMessage && <p className="font-body-sm text-primary mt-4">{syncMessage}</p>}
-                  </div>
-                )}
-
-                <div className="overflow-x-auto glass-panel">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-low border-b border-white/10">
-                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                          Item
-                        </th>
-                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                          Precio Steam
-                        </th>
-                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                          Markup (%)
-                        </th>
-                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                          Precio Final
-                        </th>
-                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {items.map((item) => (
-                        <tr key={item.id} className="hover:bg-white/5 transition-colors group">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-surface-container-highest border border-white/10 p-1">
-                                <ImagePlaceholder label="" icon="category" className="w-full h-full" />
-                              </div>
-                              <div>
-                                <div className="font-body-md text-on-surface font-semibold">
-                                  {item.name}
-                                </div>
-                                <div className="text-[10px] font-label-caps text-secondary uppercase">
-                                  {RARITY_LABEL[item.rarity]}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 font-price-display text-price-display text-on-surface-variant">
-                            {formatPEN(item.marketPrice)}
-                          </td>
-                          <td className="px-6 py-4">
-                            <input
-                              className="bg-surface border border-white/10 text-on-surface font-label-caps text-center w-20 py-1 focus:ring-1 focus:ring-secondary focus:outline-none"
-                              type="number"
-                              step="0.1"
-                              placeholder="global"
-                              value={item.markupPercentOverride ?? ""}
-                              onChange={(e) => handleMarkupChange(item.id, e.target.value)}
-                            />
-                          </td>
-                          <td className="px-6 py-4 font-price-display text-price-display text-on-surface">
-                            {formatPEN(item.price)}
-                          </td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => handleSyncPrice(item.id)}
-                              disabled={syncingId === item.id}
-                              className="flex items-center gap-1 text-secondary hover:underline font-label-caps text-[10px] disabled:opacity-50"
-                            >
-                              <span className="material-symbols-outlined text-sm">sync</span>
-                              {syncingId === item.id ? "SINCRONIZANDO..." : "SYNC STEAM MARKET"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="px-6 py-4 flex justify-between items-center bg-surface-container-low border-t border-white/10">
-                    <span className="text-on-surface-variant font-body-sm">
-                      Mostrando {items.length} de {items.length} items
-                    </span>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {!dataLoading && tab === "warehouse" && (
-              <section className="space-y-gutter">
-                <div>
-                  <h1 className="font-headline-lg text-headline-lg text-on-surface">
-                    Almacén de Steam
-                  </h1>
-                  <p className="font-body-md text-on-surface-variant">
-                    Cuentas de Steam registradas como stock de la empresa — su inventario real
-                    alimenta el catálogo público.
-                  </p>
-                </div>
-
-                <div className="glass-panel p-6">
-                  <h2 className="font-headline-md text-headline-md text-on-surface mb-4">Cuentas</h2>
-                  <div className="flex flex-col gap-2 mb-4">
-                    {accounts.map((account) => (
-                      <div
-                        key={account.id}
-                        className="flex items-center justify-between bg-surface border border-white/10 px-4 py-2"
-                      >
-                        <div>
-                          <span className="font-body-md text-on-surface font-semibold">
-                            {account.label}
-                          </span>
-                          <span className="text-on-surface-variant font-body-sm ml-2">
-                            {account.steamId}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveAccount(account.id)}
-                          disabled={removingAccountId === account.id}
-                          className="text-error hover:underline font-label-caps text-[10px] disabled:opacity-50"
-                        >
-                          {removingAccountId === account.id ? "..." : "Quitar"}
-                        </button>
-                      </div>
-                    ))}
-                    {accounts.length === 0 && (
-                      <p className="text-on-surface-variant font-body-sm">
-                        Todavía no hay cuentas de almacén registradas.
-                      </p>
-                    )}
-                  </div>
-
-                  <form onSubmit={handleAddAccount} className="flex flex-wrap items-center gap-2 mb-4">
-                    <input
-                      className="bg-surface border border-white/10 text-on-surface font-body-sm py-2 px-3"
-                      type="text"
-                      placeholder="SteamID64 (17 dígitos)"
-                      value={newAccountSteamId}
-                      onChange={(e) => setNewAccountSteamId(e.target.value)}
-                    />
-                    <input
-                      className="bg-surface border border-white/10 text-on-surface font-body-sm py-2 px-3"
-                      type="text"
-                      placeholder="Nombre (ej. Cuenta principal)"
-                      value={newAccountLabel}
-                      onChange={(e) => setNewAccountLabel(e.target.value)}
-                    />
-                    <button
-                      type="submit"
-                      disabled={addingAccount}
-                      className="bg-secondary text-on-secondary px-4 py-2 font-label-caps text-label-caps hover:brightness-110 transition-all disabled:opacity-50"
-                    >
-                      {addingAccount ? "Agregando..." : "Agregar cuenta"}
-                    </button>
-                  </form>
-
-                  <div className="flex items-center gap-4 pt-4 border-t border-white/10">
-                    <button
-                      onClick={handleSyncWarehouse}
-                      disabled={syncingWarehouse}
-                      className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                    >
-                      <span
-                        className={`material-symbols-outlined text-sm ${syncingWarehouse ? "animate-spin" : ""}`}
-                      >
-                        sync
-                      </span>
-                      {syncingWarehouse ? "Sincronizando..." : "Sincronizar almacén ahora"}
-                    </button>
-                    {warehouseMessage && (
-                      <span className="font-body-sm text-primary">{warehouseMessage}</span>
-                    )}
-                  </div>
-                </div>
-
-                {unpublishedItems.length > 0 && (
-                  <div className="glass-panel p-6 border-l-4 border-l-secondary">
-                    <h2 className="font-headline-md text-headline-md text-on-surface mb-1">
-                      Pendientes de publicar ({unpublishedItems.length})
-                    </h2>
-                    <p className="font-body-sm text-on-surface-variant mb-4">
-                      Items nuevos que trajo el último sync de almacén. Consulta el precio de Steam
-                      como referencia, pon el precio que quieras, y publícalo para que recién ahí
-                      salga en la tienda. Si vuelves a sincronizar y ya tienen copias iguales acá, no
-                      se duplican — solo suma al stock una vez publicados.
+                    <p className="font-body-sm text-on-surface-variant flex items-center gap-2 flex-wrap">
+                      {filteredCatalogItems.length} item{filteredCatalogItems.length === 1 ? "" : "s"} en el catálogo
+                      {filterCustomMarkup && (
+                        <span className="inline-flex items-center gap-1 bg-secondary/10 text-secondary border border-secondary/20 px-2 py-0.5 font-label-caps text-[9px] uppercase">
+                          Markup personalizado
+                          <button
+                            type="button"
+                            onClick={() => setFilterCustomMarkup(false)}
+                            aria-label="Quitar filtro de markup personalizado"
+                            className="hover:text-primary"
+                          >
+                            <span className="material-symbols-outlined text-xs">close</span>
+                          </button>
+                        </span>
+                      )}
                     </p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-surface-container-low border-b border-white/10">
-                            <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                              Item
-                            </th>
-                            <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                              Precio Steam (ref.)
-                            </th>
-                            <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                              Precio final
-                            </th>
-                            <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                              Stock
-                            </th>
-                            <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                              Acciones
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {unpublishedItems.map((item) => (
-                            <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 bg-surface-container-highest border border-white/10 p-1 flex items-center justify-center">
-                                    {item.imageUrl ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
-                                    ) : (
-                                      <ImagePlaceholder label="" icon="category" className="w-full h-full" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <div className="font-body-md text-on-surface font-semibold">
-                                      {item.name}
-                                    </div>
-                                    <div className="text-[10px] font-label-caps text-secondary uppercase">
-                                      {item.hero ?? CATEGORY_LABEL[item.category]} · {RARITY_LABEL[item.rarity]}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-price-display text-price-display text-on-surface-variant">
-                                    {formatPEN(item.marketPrice)}
-                                  </span>
-                                  <button
-                                    onClick={() => handleConsultPrice(item.id)}
-                                    disabled={syncingId === item.id}
-                                    className="flex items-center gap-1 text-secondary hover:underline font-label-caps text-[10px] disabled:opacity-50"
-                                  >
-                                    <span className="material-symbols-outlined text-sm">sync</span>
-                                    {syncingId === item.id ? "..." : "Consultar"}
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
+
+                    {filteredCatalogItems.length === 0 ? (
+                      <p className="text-center py-16 font-body-md text-on-surface-variant bg-surface-container border border-on-surface/5">
+                        No hay items que coincidan con estos filtros.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-gutter">
+                        {filteredCatalogItems.map((item) => (
+                          <AdminItemCard
+                            key={item.id}
+                            item={item}
+                            deleting={deletingId === item.id}
+                            onEdit={() => router.push(`/admin/items/${item.id}`)}
+                            onDelete={() => handleDeleteItem(item.id, item.name)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Precios: markup global, por rareza, y sync (columna lateral) */}
+                  <div className="flex flex-col gap-gutter">
+                    {config && (
+                      <div className="bg-surface-container border border-on-surface/5">
+                        <div className="flex items-start justify-between gap-3 p-5 pb-4 border-b border-on-surface/5">
+                          <div>
+                            <h2 className="font-body-md text-on-surface font-semibold">Markup por rareza</h2>
+                            <p className="font-body-sm text-on-surface-variant mt-0.5">
+                              Vacío = usa el markup global de esa rareza.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={goToCustomMarkupItems}
+                            disabled={customMarkupCount === 0}
+                            className="shrink-0 flex flex-col items-center gap-0.5 px-3 py-2 border border-on-surface/10 hover:border-secondary/40 hover:bg-secondary/5 transition-colors disabled:opacity-30 disabled:hover:border-on-surface/10 disabled:hover:bg-transparent"
+                          >
+                            <span className="font-headline-sm text-headline-sm text-secondary leading-none">
+                              {customMarkupCount}
+                            </span>
+                            <span className="font-label-caps text-[9px] text-on-surface-variant uppercase whitespace-nowrap">
+                              Personalizados
+                            </span>
+                          </button>
+                        </div>
+
+                        <div className="divide-y divide-on-surface/5">
+                          {SELLABLE_RARITIES.map((rarity) => {
+                            const raw = rarityInputs[rarity];
+                            const usingGlobal = raw.trim() === "";
+                            const percent = usingGlobal ? config.globalMarkupPercent : Number(raw);
+                            const previewFinal = Number.isNaN(percent)
+                              ? null
+                              : MARKUP_PREVIEW_PRICE * (1 + percent / 100);
+
+                            return (
+                              <div key={rarity} className="flex flex-col gap-2 px-5 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className={`w-2 h-2 shrink-0 rounded-full ${RARITY_DOT_CLASS[rarity]}`} />
+                                  <label className="font-body-sm text-on-surface w-24 shrink-0">
+                                    {RARITY_LABEL[rarity]}
+                                  </label>
                                   <input
-                                    className="bg-surface border border-white/10 text-on-surface font-label-caps text-center w-24 py-1 focus:ring-1 focus:ring-secondary focus:outline-none"
+                                    className="flex-1 min-w-0 bg-surface border border-on-surface/10 text-on-surface font-body-sm py-1.5 px-3 focus:ring-1 focus:ring-secondary focus:outline-none"
                                     type="number"
                                     step="0.1"
-                                    placeholder={formatPEN(item.price)}
-                                    value={priceInputs[item.id] ?? item.manualPriceOverride ?? ""}
+                                    value={rarityInputs[rarity]}
                                     onChange={(e) =>
-                                      setPriceInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                      setRarityInputs((prev) => ({ ...prev, [rarity]: e.target.value }))
                                     }
+                                    onFocus={(e) => e.target.select()}
                                   />
+                                  <span className="font-body-sm text-on-surface-variant shrink-0">%</span>
                                   <button
-                                    onClick={() => handlePriceSave(item.id)}
-                                    disabled={savingPriceId === item.id}
-                                    className="bg-secondary text-on-secondary px-3 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
+                                    onClick={() => handleRarityMarkupSave(rarity)}
+                                    disabled={savingRarity === rarity}
+                                    aria-label={`Aplicar markup de ${RARITY_LABEL[rarity]}`}
+                                    className="shrink-0 w-8 h-8 flex items-center justify-center border border-on-surface/10 text-on-surface-variant hover:border-secondary hover:text-secondary transition-colors disabled:opacity-50"
                                   >
-                                    {savingPriceId === item.id ? "..." : "Guardar"}
+                                    <span className="material-symbols-outlined text-base">
+                                      {savingRarity === rarity ? "hourglass_empty" : "check"}
+                                    </span>
                                   </button>
                                 </div>
-                              </td>
-                              <td className="px-6 py-4 font-body-sm text-on-surface-variant">
-                                {item.stock}
-                              </td>
-                              <td className="px-6 py-4">
-                                <button
-                                  onClick={() => handlePublish(item.id)}
-                                  disabled={publishingId === item.id}
-                                  className="flex items-center gap-1 bg-primary text-on-primary px-3 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                                >
-                                  <span className="material-symbols-outlined text-sm">check_circle</span>
-                                  {publishingId === item.id ? "..." : "Publicar"}
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
 
-                {recentPendingItems.length > 0 && (
-                  <div className="glass-panel p-6">
-                    <h2 className="font-headline-md text-headline-md text-on-surface mb-1">
-                      Items recientes
-                    </h2>
-                    <p className="font-body-sm text-on-surface-variant mb-4">
-                      Regalos recién recibidos, todavía en trade hold — se suman al stock disponible
-                      cuando se liberan.
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {recentPendingItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between bg-surface border border-white/10 px-4 py-2"
-                        >
-                          <span className="font-body-md text-on-surface">{item.name}</span>
-                          <span className="text-on-surface-variant font-body-sm">
-                            Disponible el{" "}
-                            {new Date(item.pendingHolds[0]).toLocaleDateString("es-PE")}
-                            {item.pendingHolds.length > 1 ? ` (+${item.pendingHolds.length - 1} más)` : ""}
-                          </span>
+                                {previewFinal !== null && (
+                                  <div className="flex items-center gap-2 pl-5 font-body-sm">
+                                    <span className="text-on-surface-variant">{formatPEN(MARKUP_PREVIEW_PRICE)}</span>
+                                    <span className="material-symbols-outlined text-sm text-on-surface-variant">
+                                      arrow_forward
+                                    </span>
+                                    <span className="text-secondary font-semibold">{formatPEN(previewFinal)}</span>
+                                    {usingGlobal && (
+                                      <span className="font-label-caps text-[9px] text-on-surface-variant uppercase">
+                                        (global {config.globalMarkupPercent}%)
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
-                <div className="glass-panel p-6">
-                  <h2 className="font-headline-md text-headline-md text-on-surface mb-4">Catálogo</h2>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <select
-                      value={filterHero}
-                      onChange={(e) => setFilterHero(e.target.value)}
-                      className="bg-surface border border-white/10 text-on-surface font-body-sm py-2 px-3"
-                    >
-                      <option value="">Todos los héroes</option>
-                      {ALL_HERO_NAMES.map((hero) => (
-                        <option key={hero} value={hero}>
-                          {hero}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={filterCategory}
-                      onChange={(e) => setFilterCategory(e.target.value as ItemCategory | "")}
-                      className="bg-surface border border-white/10 text-on-surface font-body-sm py-2 px-3"
-                    >
-                      <option value="">Todas las categorías</option>
-                      {ALL_CATEGORIES.map((category) => (
-                        <option key={category} value={category}>
-                          {CATEGORY_LABEL[category]}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={filterRarity}
-                      onChange={(e) => setFilterRarity(e.target.value as Rarity | "")}
-                      className="bg-surface border border-white/10 text-on-surface font-body-sm py-2 px-3"
-                    >
-                      <option value="">Todas las rarezas</option>
-                      {FILTERABLE_RARITIES.map((rarity) => (
-                        <option key={rarity} value={rarity}>
-                          {RARITY_LABEL[rarity]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-surface-container-low border-b border-white/10">
-                          <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                            Item
-                          </th>
-                          <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                            Precio Steam (ref.)
-                          </th>
-                          <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                            Precio final
-                          </th>
-                          <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
-                            Stock
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredWarehouseItems.map((item) => (
-                          <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-surface-container-highest border border-white/10 p-1 flex items-center justify-center">
-                                  {item.imageUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
-                                  ) : (
-                                    <ImagePlaceholder label="" icon="category" className="w-full h-full" />
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="font-body-md text-on-surface font-semibold">
-                                    {item.name}
-                                  </div>
-                                  <div className="text-[10px] font-label-caps text-secondary uppercase">
-                                    {item.hero ?? CATEGORY_LABEL[item.category]} · {RARITY_LABEL[item.rarity]}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <span className="font-price-display text-price-display text-on-surface-variant">
-                                  {formatPEN(item.marketPrice)}
-                                </span>
-                                <button
-                                  onClick={() => handleConsultPrice(item.id)}
-                                  disabled={syncingId === item.id}
-                                  className="flex items-center gap-1 text-secondary hover:underline font-label-caps text-[10px] disabled:opacity-50"
-                                  title="Pedirle a Steam Market el precio actual (solo como referencia, no cambia el precio final)"
-                                >
-                                  <span className="material-symbols-outlined text-sm">sync</span>
-                                  {syncingId === item.id ? "..." : "Consultar"}
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  className="bg-surface border border-white/10 text-on-surface font-label-caps text-center w-24 py-1 focus:ring-1 focus:ring-secondary focus:outline-none"
-                                  type="number"
-                                  step="0.1"
-                                  placeholder={formatPEN(item.price)}
-                                  value={priceInputs[item.id] ?? item.manualPriceOverride ?? ""}
-                                  onChange={(e) =>
-                                    setPriceInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
-                                  }
-                                />
-                                <button
-                                  onClick={() => handlePriceSave(item.id)}
-                                  disabled={savingPriceId === item.id}
-                                  className="bg-secondary text-on-secondary px-3 py-2 font-label-caps text-[10px] hover:brightness-110 transition-all disabled:opacity-50"
-                                >
-                                  {savingPriceId === item.id ? "..." : "Guardar"}
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
+                        <div className="flex flex-col gap-3 p-5 pt-4 border-t border-on-surface/5">
+                          <button
+                            onClick={handleSyncNow}
+                            disabled={syncingNow}
+                            className="relative overflow-hidden flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 font-label-caps text-label-caps hover:brightness-110 transition-all disabled:opacity-90"
+                          >
+                            <span className={`material-symbols-outlined text-base ${syncingNow ? "animate-spin" : ""}`}>
+                              sync
+                            </span>
+                            {syncingNow
+                              ? syncWaiting
+                                ? `Esperando a Steam... ${syncProgress}%`
+                                : `Sincronizando... ${syncProgress}%`
+                              : "Sincronizar todos los ítems"}
+                            {syncingNow && (
                               <span
-                                className={`px-2 py-1 font-label-caps text-[10px] uppercase ${
-                                  item.stock > 0
-                                    ? "bg-primary/10 text-primary"
-                                    : "bg-error/10 text-error"
-                                }`}
-                              >
-                                {item.stock > 0 ? `${item.stock} disponibles` : "Agotado"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        {filteredWarehouseItems.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
-                              No hay items que coincidan con estos filtros.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                                className="absolute bottom-0 left-0 h-[3px] bg-on-primary/60 transition-all duration-300 ease-out"
+                                style={{ width: `${syncProgress}%` }}
+                              />
+                            )}
+                          </button>
+                          <p className="font-body-sm text-on-surface-variant">
+                            Consulta el precio actual en Steam Market para todos los items del catálogo.
+                          </p>
+
+                          {syncMessage && <p className="font-body-sm text-primary">{syncMessage}</p>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1026,7 +628,7 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <div className="flex gap-base">
-                    <div className="bg-surface-container-low border border-white/10 px-4 py-2 flex items-center gap-4">
+                    <div className="bg-surface-container-low border border-on-surface/10 px-4 py-2 flex items-center gap-4">
                       <span className="font-label-caps text-label-caps text-primary">
                         {pendingCount} Solicitudes Pendientes
                       </span>
@@ -1034,10 +636,10 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto glass-panel">
+                <div className="overflow-x-auto bg-surface-container border border-on-surface/5">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-surface-container-low border-b border-white/10">
+                      <tr className="border-b border-on-surface/5">
                         <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">
                           Usuario
                         </th>
@@ -1058,9 +660,9 @@ export default function AdminPage() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-on-surface/5">
                       {orders.map((order) => (
-                        <tr key={order.id} className="hover:bg-white/5 transition-colors">
+                        <tr key={order.id} className="hover:bg-on-surface/5 transition-colors">
                           <td className="px-6 py-4">
                             <div className="font-body-md text-on-surface font-semibold">
                               {order.userDisplayName}
@@ -1136,11 +738,11 @@ export default function AdminPage() {
                   Analítica de Mercado
                 </h1>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-                  <div className="glass-panel h-64 flex flex-col items-center justify-center text-on-surface-variant border-dashed border-2">
+                  <div className="h-64 flex flex-col items-center justify-center text-on-surface-variant border border-dashed border-on-surface/10">
                     <span className="material-symbols-outlined text-4xl mb-4">show_chart</span>
                     <p className="font-label-caps uppercase">Módulo de Tendencia de Ventas</p>
                   </div>
-                  <div className="glass-panel h-64 flex flex-col items-center justify-center text-on-surface-variant border-dashed border-2">
+                  <div className="h-64 flex flex-col items-center justify-center text-on-surface-variant border border-dashed border-on-surface/10">
                     <span className="material-symbols-outlined text-4xl mb-4">pie_chart</span>
                     <p className="font-label-caps uppercase">Distribución del Inventario</p>
                   </div>
@@ -1150,6 +752,16 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+
+      <PdfExportModal open={pdfModalOpen} onClose={() => setPdfModalOpen(false)} />
+      <ConfirmDialog
+        open={!!confirmDialog}
+        message={confirmDialog?.message ?? ""}
+        danger={confirmDialog?.danger}
+        loading={confirmLoading}
+        onConfirm={handleConfirmAccept}
+        onCancel={handleConfirmCancel}
+      />
     </div>
   );
 }

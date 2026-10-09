@@ -29,7 +29,4 @@ export class PricingConfigOrmEntity {
 
   @Column({ type: 'timestamptz', nullable: true })
   lastFullSyncAt!: Date | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  lastWarehouseSyncAt!: Date | null;
 }

@@ -17,6 +17,8 @@ import type { Response } from 'express';
 import { AppConfig } from '../../../../config/configuration';
 import { User, type UserRole } from '../../domain/entities/user.entity';
 import { USER_REPOSITORY, type UserRepository } from '../../domain/ports/user.repository.port';
+import { AcceptTermsUseCase } from '../../application/use-cases/accept-terms.use-case';
+import { ConfirmAdultUseCase } from '../../application/use-cases/confirm-adult.use-case';
 import { LoginWithPasswordUseCase } from '../../application/use-cases/login-with-password.use-case';
 import { RegisterUserUseCase } from '../../application/use-cases/register-user.use-case';
 import { UpdateTradeUrlUseCase } from '../../application/use-cases/update-trade-url.use-case';
@@ -25,6 +27,8 @@ import { SESSION_COOKIE_NAME } from '../constants';
 import { JwtAuthGuard, type RequestUser } from '../guards/jwt-auth.guard';
 import type { SteamValidatedProfile } from '../../infrastructure/steam/steam.strategy';
 import { SteamAuthGuard } from '../guards/steam-auth.guard';
+import { AcceptTermsDto } from './dto/accept-terms.dto';
+import { ConfirmAdultDto } from './dto/confirm-adult.dto';
 import { DevTokenDto } from './dto/dev-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -34,6 +38,7 @@ import { InvalidDomainStateException } from '../../../../shared/domain/exception
 interface SteamCallbackRequest extends Express.Request {
   user: SteamValidatedProfile;
   cookies?: Record<string, string>;
+  ip?: string;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -47,6 +52,8 @@ export class AuthController {
     private readonly updateTradeUrl: UpdateTradeUrlUseCase,
     private readonly registerUser: RegisterUserUseCase,
     private readonly loginWithPassword: LoginWithPasswordUseCase,
+    private readonly confirmAdult: ConfirmAdultUseCase,
+    private readonly acceptTermsUseCase: AcceptTermsUseCase,
   ) {}
 
   /** Crea una cuenta local (sin Steam todavía — se vincula después desde el perfil). */
@@ -101,6 +108,7 @@ export class AuthController {
     const adminSteamIds = this.configService.get('adminSteamIds', { infer: true });
     const role: UserRole = adminSteamIds.includes(profile.steamId) ? 'admin' : 'customer';
 
+    const loginIp = req.ip;
     const alreadyLinkedTo = await this.users.findBySteamId(profile.steamId);
     const sessionUser = await this.tryGetSessionUser(req);
 
@@ -108,12 +116,14 @@ export class AuthController {
     if (sessionUser && (!alreadyLinkedTo || alreadyLinkedTo.id === sessionUser.id)) {
       // Vincular Steam a la cuenta local ya logueada (no pisa el displayName elegido al registrarse).
       sessionUser.linkSteamAccount(profile.steamId, profile.avatarUrl);
+      sessionUser.recordLoginIp(loginIp);
       await this.users.save(sessionUser);
       user = sessionUser;
     } else if (alreadyLinkedTo) {
       // Login normal de una cuenta que ya se había logueado con Steam antes
       // (con o sin registro local previo) — refresca nombre/avatar/rol.
       alreadyLinkedTo.syncFromSteamProfile(profile.displayName, profile.avatarUrl, role);
+      alreadyLinkedTo.recordLoginIp(loginIp);
       await this.users.save(alreadyLinkedTo);
       user = alreadyLinkedTo;
     } else {
@@ -124,6 +134,7 @@ export class AuthController {
         avatarUrl: profile.avatarUrl,
         role,
       });
+      user.recordLoginIp(loginIp);
       await this.users.save(user);
     }
 
@@ -155,6 +166,40 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async updateMe(@CurrentUser() requestUser: RequestUser, @Body() dto: UpdateTradeUrlDto) {
     const user = await this.updateTradeUrl.execute(requestUser.userId, dto.tradeUrl);
+    return this.toProfileResponse(user);
+  }
+
+  /** El estado actual de la cuenta frente a los gates de "puedo jugar con dinero": edad y términos. */
+  @Get('me/gates')
+  @UseGuards(JwtAuthGuard)
+  async myGates(@CurrentUser() requestUser: RequestUser) {
+    const user = await this.users.findById(requestUser.userId);
+    if (!user) throw new ForbiddenException('Usuario no encontrado.');
+    const termsVersion = this.configService.get('terms', { infer: true }).version;
+    return {
+      adultConfirmed: user.isAdult(),
+      termsVersion,
+      termsAccepted: user.hasAcceptedTerms(termsVersion),
+    };
+  }
+
+  /** Acepta los Términos de Servicio en su versión vigente. Sin esto no se puede jugar ni mover dinero. */
+  @Post('accept-terms')
+  @UseGuards(JwtAuthGuard)
+  async acceptTerms(@CurrentUser() requestUser: RequestUser, @Body() dto: AcceptTermsDto) {
+    const termsVersion = this.configService.get('terms', { infer: true }).version;
+    if (dto.version !== termsVersion) {
+      throw new InvalidDomainStateException(`La versión vigente de los Términos es la ${termsVersion}.`);
+    }
+    const user = await this.acceptTermsUseCase.execute(requestUser.userId, termsVersion);
+    return this.toProfileResponse(user);
+  }
+
+  /** Declara la fecha de nacimiento; solo un mayor de 18 queda habilitado para jugar con dinero y recargar. */
+  @Post('confirm-adult')
+  @UseGuards(JwtAuthGuard)
+  async confirmAdultAge(@CurrentUser() requestUser: RequestUser, @Body() dto: ConfirmAdultDto) {
+    const user = await this.confirmAdult.execute(requestUser.userId, dto.birthDate);
     return this.toProfileResponse(user);
   }
 
@@ -193,6 +238,8 @@ export class AuthController {
       tradeUrl: user.tradeUrl,
       steamId: user.steamId,
       email: user.email,
+      adultConfirmed: user.isAdult(),
+      termsAcceptedVersion: user.termsAcceptedVersion ?? null,
     };
   }
 

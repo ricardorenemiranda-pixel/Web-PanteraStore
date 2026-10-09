@@ -1,7 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { EntityNotFoundException } from '../../../../shared/domain/exceptions/domain.exception';
+import {
+  EntityNotFoundException,
+  InvalidDomainStateException,
+} from '../../../../shared/domain/exceptions/domain.exception';
 import type { Item, SetPiece } from '../../domain/entities/item.entity';
-import { type ItemRepository, ITEM_REPOSITORY } from '../../domain/ports/item.repository.port';
+import {
+  type ItemRepository,
+  ITEM_REPOSITORY,
+} from '../../domain/ports/item.repository.port';
 import {
   type SteamMarketGateway,
   STEAM_MARKET_RAW_GATEWAY,
@@ -24,8 +30,10 @@ export class SyncItemPriceUseCase {
 
   constructor(
     @Inject(ITEM_REPOSITORY) private readonly items: ItemRepository,
-    @Inject(STEAM_MARKET_RAW_GATEWAY) private readonly steamMarket: SteamMarketGateway,
-    @Inject(STEAM_PRICE_CACHE_REPOSITORY) private readonly priceCache: SteamPriceCacheRepository,
+    @Inject(STEAM_MARKET_RAW_GATEWAY)
+    private readonly steamMarket: SteamMarketGateway,
+    @Inject(STEAM_PRICE_CACHE_REPOSITORY)
+    private readonly priceCache: SteamPriceCacheRepository,
   ) {}
 
   async execute(itemId: string): Promise<void> {
@@ -39,11 +47,21 @@ export class SyncItemPriceUseCase {
       return;
     }
 
-    const latestPrice = await this.steamMarket.getLowestPrice(item.steamMarketHashName);
+    if (!item.steamMarketHashName) {
+      throw new InvalidDomainStateException(
+        'Este item no tiene un nombre de Steam Market configurado.',
+      );
+    }
+
+    const latestPrice = await this.steamMarket.getLowestPrice(
+      item.steamMarketHashName,
+    );
     await this.priceCache.set(item.steamMarketHashName, latestPrice);
 
     if (latestPrice === null) {
-      this.logger.warn(`No se encontró precio en Steam Market para "${item.name}"`);
+      this.logger.warn(
+        `No se encontró precio en Steam Market para "${item.name}"`,
+      );
       return;
     }
 

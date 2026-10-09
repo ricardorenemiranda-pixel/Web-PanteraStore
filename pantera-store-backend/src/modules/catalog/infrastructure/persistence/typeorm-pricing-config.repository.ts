@@ -74,14 +74,6 @@ export class TypeOrmPricingConfigRepository implements PricingConfigRepository {
     await this.update({ lastFullSyncAt: date });
   }
 
-  async getLastWarehouseSyncAt(): Promise<Date | null> {
-    return (await this.getOrCreateRow()).lastWarehouseSyncAt;
-  }
-
-  async setLastWarehouseSyncAt(date: Date): Promise<void> {
-    await this.update({ lastWarehouseSyncAt: date });
-  }
-
   private async getOrCreateRow(): Promise<PricingConfigOrmEntity> {
     const existing = await this.repo.findOne({ where: { id: SINGLETON_ID } });
     if (existing) return existing;

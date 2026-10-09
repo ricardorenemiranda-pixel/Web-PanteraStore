@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BottomNav from "@/components/BottomNav";
@@ -11,6 +12,7 @@ import {
   RARITY_CLASS,
   RARITY_LABEL,
   RARITY_BADGE_CLASS,
+  RARITY_DOT_CLASS,
   Rarity,
   ALL_HERO_NAMES,
   HERO_ATTRIBUTE,
@@ -42,11 +44,14 @@ function availabilityBadge(item: CatalogItem): string {
   return "Agotado";
 }
 
-export default function CatalogoPage() {
+function CatalogoContent() {
+  const searchParams = useSearchParams();
+  const heroFromUrl = searchParams?.get("hero") ?? null;
+
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRarities, setSelectedRarities] = useState<Rarity[]>([]);
-  const [selectedHero, setSelectedHero] = useState<string | null>(null);
+  const [selectedHero, setSelectedHero] = useState<string | null>(heroFromUrl);
   const [selectedAttributes, setSelectedAttributes] = useState<HeroAttribute[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<ItemCategory[]>([]);
   const [heroSearch, setHeroSearch] = useState("");
@@ -180,7 +185,7 @@ export default function CatalogoPage() {
                       left: heroPanelRect.left,
                       width: heroPanelRect.width,
                     }}
-                    className="z-[100] flex flex-col gap-3 bg-surface-container border border-outline-variant rounded-lg shadow-2xl p-4"
+                    className="z-[100] flex flex-col gap-3 bg-surface-container border border-outline-variant rounded-xl shadow-lg p-4"
                   >
                     <div className="grid grid-cols-4 gap-2">
                       {ALL_ATTRIBUTES.map((attribute) => (
@@ -222,7 +227,7 @@ export default function CatalogoPage() {
                       <button
                         onClick={() => setSelectedHero(null)}
                         className={`flex flex-col items-center gap-1 p-1.5 rounded cursor-pointer transition-colors ${
-                          selectedHero === null ? "bg-primary/5" : "hover:bg-white/5"
+                          selectedHero === null ? "bg-primary/5" : "hover:bg-on-surface/5"
                         }`}
                       >
                         <div
@@ -241,7 +246,7 @@ export default function CatalogoPage() {
                           key={hero}
                           onClick={() => setSelectedHero(hero)}
                           className={`flex flex-col items-center gap-1 p-1.5 rounded cursor-pointer transition-colors ${
-                            selectedHero === hero ? "bg-primary/5" : "hover:bg-white/5"
+                            selectedHero === hero ? "bg-primary/5" : "hover:bg-on-surface/5"
                           }`}
                         >
                           <div
@@ -254,6 +259,8 @@ export default function CatalogoPage() {
                               <img
                                 src={HERO_ICON[hero]}
                                 alt={hero}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-full h-full object-cover"
                               />
                             ) : (
@@ -329,7 +336,7 @@ export default function CatalogoPage() {
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(Number(e.target.value))}
                 />
-                <div className="flex justify-between text-label-caps text-on-surface-variant">
+                <div className="flex justify-between figure-nums text-[11px] text-on-surface-variant">
                   <span>S/ 0</span>
                   <span>{maxPrice >= PRICE_MAX ? "S/ 2,000+" : formatPEN(maxPrice)}</span>
                 </div>
@@ -366,40 +373,54 @@ export default function CatalogoPage() {
               </p>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filteredItems.map((item) => (
                 <Link
                   key={item.id}
                   href={`/catalogo/${item.id}`}
-                  className={`group flex flex-col bg-surface-container border border-white/5 hover:border-primary/30 transition-all ${RARITY_CLASS[item.rarity]} relative overflow-hidden ${
+                  style={{ borderRadius: 0 }}
+                  className={`surface-card group flex flex-col ${RARITY_CLASS[item.rarity]} ${
                     item.stock === 0 ? "opacity-60" : ""
                   }`}
                 >
-                  <div className="absolute top-2 right-2 z-10">
-                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">
-                      {availabilityBadge(item)}
-                    </span>
-                  </div>
-                  <div className="aspect-square w-full bg-surface-container-lowest flex items-center justify-center p-4 relative">
+                  {/* Bloque 1: imagen — proporción 128:85, el tamaño real de los
+                      iconos de Steam, así el contain no deja franjas vacías */}
+                  <div className="relative aspect-[128/85] w-full overflow-hidden">
+                    <div className={`absolute inset-0 ${RARITY_DOT_CLASS[item.rarity]} opacity-[0.14]`} />
+                    <div className="absolute inset-0 bg-surface-container-lowest/70" />
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                      />
                     ) : (
-                      <ImagePlaceholder label={item.name} className="w-full h-full" />
+                      <ImagePlaceholder label={item.name} className="absolute inset-0 w-full h-full" />
                     )}
                   </div>
+                  {/* Bloque 2: texto */}
                   <div className="p-4 flex flex-col gap-1">
-                    <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest">
+                    <span
+                      className={`font-label-caps text-[9px] uppercase tracking-widest ${
+                        item.stock === 0 ? "text-error" : "text-primary"
+                      }`}
+                    >
+                      {availabilityBadge(item)}
+                    </span>
+                    <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest truncate">
                       {itemSubtitle(item)}
                     </span>
-                    <h4 className="font-body-md text-on-surface group-hover:text-primary transition-colors">
+                    <h4 className="font-body-md text-on-surface group-hover:text-primary transition-colors truncate">
                       {item.name}
                     </h4>
-                    <div className="flex justify-between items-end mt-4">
+                    <div className="flex justify-between items-end mt-2">
                       <span className={`px-2 py-0.5 text-[10px] font-bold ${RARITY_BADGE_CLASS[item.rarity]}`}>
                         {RARITY_LABEL[item.rarity]}
                       </span>
-                      <span className="font-price-display text-price-display text-on-surface">
+                      <span className="figure-nums text-on-surface text-price-display">
                         {formatPEN(item.price)}
                       </span>
                     </div>
@@ -419,5 +440,13 @@ export default function CatalogoPage() {
         <BottomNav />
       </div>
     </>
+  );
+}
+
+export default function CatalogoPage() {
+  return (
+    <Suspense fallback={null}>
+      <CatalogoContent />
+    </Suspense>
   );
 }

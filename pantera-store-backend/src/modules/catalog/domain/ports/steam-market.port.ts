@@ -1,3 +1,5 @@
+import { ExternalServiceUnavailableException } from '../../../../shared/domain/exceptions/domain.exception';
+
 export const STEAM_MARKET_GATEWAY = Symbol('STEAM_MARKET_GATEWAY');
 /**
  * El fetcher HTTP puro (sin caché persistente por delante) — solo lo usa el
@@ -14,4 +16,13 @@ export const STEAM_MARKET_RAW_GATEWAY = Symbol('STEAM_MARKET_RAW_GATEWAY');
 export interface SteamMarketGateway {
   /** Precio actual de referencia en el Steam Market, en la moneda que use Steam para esa cuenta. */
   getLowestPrice(marketHashName: string): Promise<number | null>;
+}
+
+/** Steam respondió 429 aun después de reintentar: no es "sin precio", es "no se pudo consultar ahora". */
+export class SteamRateLimitedException extends ExternalServiceUnavailableException {
+  constructor() {
+    super(
+      'Steam Market está limitando las consultas. Espera unos minutos e intenta de nuevo.',
+    );
+  }
 }

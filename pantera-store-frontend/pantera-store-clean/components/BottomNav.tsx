@@ -14,10 +14,10 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-4 pb-safe bg-surface-container-highest/95 backdrop-blur-lg border-t border-white/10 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
+    <nav className="lg:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-4 pb-safe bg-surface-container-highest/95 backdrop-blur-lg border-t border-on-surface/10 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
       {ITEMS.map((item) => {
         const active =
-          item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          item.href === "/" ? pathname === "/" : (pathname ?? "").startsWith(item.href);
         return (
           <Link
             key={item.href}

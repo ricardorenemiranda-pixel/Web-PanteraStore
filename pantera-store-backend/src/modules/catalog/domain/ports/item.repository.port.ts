@@ -17,7 +17,10 @@ export const ITEM_REPOSITORY = Symbol('ITEM_REPOSITORY');
 export interface ItemRepository {
   findAll(filter?: ItemFilter): Promise<Item[]>;
   findById(id: string): Promise<Item | null>;
-  /** Busca un item por su market_hash_name real de Steam (para el upsert del sync de almacén). */
+  /** Busca un item por su market_hash_name real de Steam. */
   findByMarketHashName(marketHashName: string): Promise<Item | null>;
+  /** Busca un item por su código de referencia corto (ver ItemProps.referenceCode). */
+  findByReferenceCode(referenceCode: string): Promise<Item | null>;
   save(item: Item): Promise<void>;
+  delete(id: string): Promise<void>;
 }

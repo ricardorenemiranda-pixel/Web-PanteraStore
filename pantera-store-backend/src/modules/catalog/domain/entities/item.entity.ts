@@ -12,7 +12,7 @@ export type Rarity =
 
 export type ItemCategory = 'hero' | 'courier' | 'weather' | 'treasure';
 
-/** Una pieza individual de un set abierto (ver SyncWarehouseCatalogUseCase). */
+/** Una pieza individual de un set abierto. Ya no se genera automáticamente (el catálogo es manual), queda por compatibilidad. */
 export interface SetPiece {
   marketHashName: string;
   name: string;
@@ -24,25 +24,33 @@ export interface SetPiece {
 
 export interface ItemProps {
   id: string;
-  /** market_hash_name real de Steam, para hacer match al sincronizar precios */
-  steamMarketHashName: string;
+  /**
+   * Código corto único, generado al crear el item — sirve para que el
+   * admin ubique rápido un item cuando un cliente le escribe por WhatsApp
+   * mencionándolo, sin tener que buscar por nombre.
+   */
+  referenceCode: string;
+  /** market_hash_name real de Steam, si el admin lo cargó — habilita "Consultar precio Steam". */
+  steamMarketHashName?: string;
   name: string;
   hero?: string;
   category: ItemCategory;
   rarity: Rarity;
+  /** Descripción libre para mostrar en el catálogo público. */
+  description?: string;
   /** Último precio de referencia leído del Steam Market (S/) */
   marketPrice: number;
   /** Markup en % aplicado solo a este item. Si es null, se usa el markup global. */
   markupPercentOverride: number | null;
   imageUrl?: string;
   dateAdded: Date;
-  /** Copias ya transferibles ahora mismo, según el último sync de almacén. */
+  /** Copias disponibles, cargado a mano por el admin. */
   stock?: number;
   /** Fechas (ordenadas) en que se liberan copias que hoy están en trade hold. */
   pendingHolds?: Date[];
   /** Precio final puesto a mano por el admin (S/). Si está, gana sobre el cálculo por markup. */
   manualPriceOverride?: number | null;
-  /** false = todavía no lo aprobó el admin, no sale en el catálogo público (ver SyncWarehouseCatalogUseCase). */
+  /** false = borrador, no sale en el catálogo público. */
   published?: boolean;
   /** Piezas de un set abierto (categoría 'treasure'). Vacío para cofres cerrados e ítems normales. */
   setPieces?: SetPiece[];
@@ -83,7 +91,11 @@ export class Item {
     return this.props.id;
   }
 
-  get steamMarketHashName(): string {
+  get referenceCode(): string {
+    return this.props.referenceCode;
+  }
+
+  get steamMarketHashName(): string | undefined {
     return this.props.steamMarketHashName;
   }
 
@@ -93,6 +105,10 @@ export class Item {
 
   get hero(): string | undefined {
     return this.props.hero;
+  }
+
+  get description(): string | undefined {
+    return this.props.description;
   }
 
   get category(): ItemCategory {
@@ -188,17 +204,39 @@ export class Item {
     this.props.published = true;
   }
 
-  /**
-   * Solo lo usa el proceso de sincronización de almacén (ver
-   * SyncWarehouseCatalogUseCase) — permite que un ítem ya existente se
-   * "autocorrija" si mejora la lógica de clasificación (ej. un cache que
-   * antes entraba como 'hero' y ahora se reconoce como 'treasure').
-   */
+  /** Publicado/borrador, editable a mano por el admin. */
+  updatePublished(published: boolean): void {
+    this.props.published = published;
+  }
+
+  updateName(name: string): void {
+    this.props.name = name;
+  }
+
+  updateHero(hero: string | undefined): void {
+    this.props.hero = hero;
+  }
+
   updateCategory(category: ItemCategory): void {
     this.props.category = category;
   }
 
-  /** Solo lo usa el proceso de sincronización de almacén (ver SyncWarehouseCatalogUseCase). */
+  updateRarity(rarity: Rarity): void {
+    this.props.rarity = rarity;
+  }
+
+  updateDescription(description: string | undefined): void {
+    this.props.description = description;
+  }
+
+  updateImageUrl(imageUrl: string | undefined): void {
+    this.props.imageUrl = imageUrl;
+  }
+
+  updateSteamMarketHashName(steamMarketHashName: string | undefined): void {
+    this.props.steamMarketHashName = steamMarketHashName;
+  }
+
   updateStock(stock: number): void {
     if (stock < 0) {
       throw new InvalidDomainStateException(`El stock no puede ser negativo (recibido: ${stock}).`);
@@ -206,12 +244,10 @@ export class Item {
     this.props.stock = stock;
   }
 
-  /** Solo lo usa el proceso de sincronización de almacén (ver SyncWarehouseCatalogUseCase). */
   updatePendingHolds(dates: Date[]): void {
     this.props.pendingHolds = [...dates].sort((a, b) => a.getTime() - b.getTime());
   }
 
-  /** Solo lo usa el proceso de sincronización de almacén (ver SyncWarehouseCatalogUseCase). */
   updateSetPieces(pieces: SetPiece[]): void {
     this.props.setPieces = [...pieces];
   }

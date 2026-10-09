@@ -1,185 +1,239 @@
+import fs from "fs";
+import path from "path";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BottomNav from "@/components/BottomNav";
-import ImagePlaceholder from "@/components/ImagePlaceholder";
-import { ITEMS, RARITY_CLASS, RARITY_LABEL, RARITY_TEXT_CLASS, itemSubtitle } from "@/lib/mock-data";
-import { formatPEN } from "@/lib/currency";
+import Reveal from "@/components/Reveal";
+import HeroMarquee from "@/components/HeroMarquee";
+import TopItemsMarquee from "@/components/TopItemsMarquee";
+import { fetchCatalogItems } from "@/lib/catalogApi";
 
-export default function HomePage() {
-  const featured = ITEMS.slice(0, 4);
+// Fotos/videos reales van en public/media/home/ (ver README.txt ahí) — se
+// detectan solos por nombre de archivo, sin tener que tocar este código
+// de nuevo cuando alguien los suba.
+const HOME_MEDIA_DIR = path.join(process.cwd(), "public", "media", "home");
+function homeMediaExists(filename: string): boolean {
+  try {
+    return fs.existsSync(path.join(HOME_MEDIA_DIR, filename));
+  } catch {
+    return false;
+  }
+}
+
+// De Heraldo a Inmortal, en una sola fila — el tamaño y la altura de
+// cada ícono crecen en curva hacia el final, como una media luna que
+// termina en su punta más alta (Inmortal).
+const RANKS = [
+  { slug: "herald", label: "Heraldo" },
+  { slug: "guardian", label: "Guardián" },
+  { slug: "crusader", label: "Cruzado" },
+  { slug: "archon", label: "Arconte" },
+  { slug: "legend", label: "Leyenda" },
+  { slug: "ancient", label: "Ancestro" },
+  { slug: "divine", label: "Divino" },
+  { slug: "immortal", label: "Inmortal" },
+];
+const RANK_MIN_SIZE = 3.5; // rem
+const RANK_MAX_SIZE = 8; // rem
+const RANK_MAX_LIFT = 6.5; // rem — cuánto sube el último respecto al primero
+
+export default async function HomePage() {
+  const hasHeroVideo = homeMediaExists("hero.mp4");
+  const hasHeroPoster = homeMediaExists("hero-poster.jpg");
+  const hasRanksBackground = homeMediaExists("ranks-bg.jpg");
+
+  const allItems = await fetchCatalogItems().catch(() => []);
+  const topItems = [...allItems].sort((a, b) => b.price - a.price).slice(0, 10);
+
+  const rankCurve = RANKS.map((rank, i) => {
+    // Curva que acelera hacia el final (t^1.6) — sube poco al principio
+    // y se dispara cerca de Inmortal, en vez de una rampa recta.
+    const t = i / (RANKS.length - 1);
+    const curve = Math.pow(t, 1.6);
+    return {
+      ...rank,
+      size: RANK_MIN_SIZE + (RANK_MAX_SIZE - RANK_MIN_SIZE) * curve,
+      lift: RANK_MAX_LIFT * curve,
+      iconUrl: homeMediaExists(`ranks/${rank.slug}.png`) ? `/media/home/ranks/${rank.slug}.png` : null,
+    };
+  });
 
   return (
     <>
-      <Header />
-      <main className="pt-16 pb-24 lg:pb-0">
-        {/* Hero */}
-        <section className="relative w-full h-[600px] md:h-[720px] flex items-center overflow-hidden">
-          <div className="absolute inset-0 z-0">
-            <ImagePlaceholder
-              label="Banner principal — héroes de Dota 2 en pose dramática"
-              icon="landscape"
-              className="w-full h-full opacity-60"
-            />
-            <div className="absolute inset-0 hero-gradient" />
-          </div>
-          <div className="relative z-10 px-margin-mobile md:px-margin-desktop max-w-4xl">
-            <h1 className="font-headline-xl text-headline-xl mb-6 leading-tight">
-              Compra y vende tus items de <span className="text-primary">Dota 2</span> al
-              mejor precio
+      <Header overHero={hasHeroVideo} />
+      <main className="pb-24 lg:pb-0">
+        {/* Hero a pantalla completa — video de fondo, texto superpuesto en
+            su propio bloque. El header (fixed, fuera de este flujo) va
+            transparente encima mientras esta sección está a la vista. */}
+        <section className="relative w-full min-h-[100dvh] flex items-center justify-center overflow-hidden">
+          {hasHeroVideo ? (
+            <video
+              className="absolute inset-0 w-full h-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+              poster={hasHeroPoster ? "/media/home/hero-poster.jpg" : undefined}
+            >
+              <source src="/media/home/hero.mp4" type="video/mp4" />
+            </video>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-primary via-[#3a2f5c] to-[#14101f]" />
+          )}
+          {/* Capa oscura general — más fuerte que antes, para que el
+              título resalte incluso fusionado con el video. */}
+          <div className="absolute inset-0 bg-black/45" />
+          {/* Viñeta radial centrada, justo donde va el texto. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 55% at 50% 46%, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 55%, transparent 80%)",
+            }}
+          />
+          {/* Fundido final — el video se "derrite" hacia el color real de
+              fondo de la página en vez de cortar en seco contra la
+              siguiente sección. */}
+          <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-background to-transparent" />
+
+          <div className="relative z-10 w-full max-w-3xl mx-auto px-margin-mobile text-center">
+            <h1
+              className="hero-title-drop font-headline-xl text-headline-lg-mobile md:text-headline-xl lg:text-[80px] lg:leading-[1.02] text-white text-balance"
+              style={{ mixBlendMode: "overlay" }}
+            >
+              ¿Estás listo para la batalla?
             </h1>
-            <p className="font-body-lg text-body-lg text-on-tertiary-container mb-8 max-w-2xl">
-              La tienda definitiva para coleccionistas peruanos. Transacciones rápidas,
-              seguras y con las mejores tasas del mercado.
+            <p className="hero-sub-drop font-body-lg text-body-lg text-white/85 mt-6 max-w-[46ch] mx-auto">
+              Únete a las salas de la comunidad y prueba tu talento contra otros jugadores de
+              Dota 2.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="hero-cta-drop flex flex-col sm:flex-row gap-3 mt-10 justify-center">
+              <Link
+                href="/salas"
+                className="bg-transparent border border-white/60 text-white font-medium text-body-md px-8 py-3.5 rounded-full flex items-center justify-center gap-2 transition-colors duration-300 hover:bg-primary/20 hover:border-primary/70 active:scale-[0.97]"
+              >
+                Unirme ahora
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Muro de héroes — carrusel infinito, varias filas en direcciones
+            alternadas. Mismos íconos que ya usa el filtro de héroes del
+            catálogo, sin assets nuevos. */}
+        <Reveal>
+          <section className="py-24 max-w-container-max mx-auto">
+            <div className="text-center mb-10 px-margin-mobile md:px-margin-desktop">
+              <h2 className="font-headline-lg text-headline-lg text-on-surface mb-3">
+                Todo el roster, cubierto
+              </h2>
+              <p className="font-body-md text-on-surface-variant max-w-[52ch] mx-auto mb-6">
+                127 héroes de Dota 2 — si tiene un cosmético, hay buenas chances de que lo tengamos
+                o te lo compremos.
+              </p>
               <Link
                 href="/catalogo"
-                className="bg-primary-container text-on-primary font-headline-md text-body-md px-8 py-4 rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-3 active:scale-95"
+                className="inline-flex items-center gap-2 border border-outline text-on-surface font-medium text-body-sm px-6 py-3 rounded-full hover:bg-white/5 transition-colors"
               >
-                Ver catálogo
-                <span className="material-symbols-outlined">trending_flat</span>
-              </Link>
-              <Link
-                href="/inventario"
-                className="border border-white/30 text-on-surface font-headline-md text-body-md px-8 py-4 rounded-lg hover:bg-white/10 transition-all flex items-center justify-center gap-3 active:scale-95"
-              >
-                Vende tus items
-                <span className="material-symbols-outlined">sell</span>
+                Ver catálogo completo
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </Link>
             </div>
-          </div>
-        </section>
+            <HeroMarquee />
+          </section>
+        </Reveal>
 
-        {/* Categorías rápidas */}
-        <section className="py-16 px-margin-mobile md:px-margin-desktop">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Link
-              href="/catalogo"
-              className="glass-card p-6 rounded-xl group cursor-pointer hover:border-primary/50 transition-all border border-transparent"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <span className="material-symbols-outlined text-primary text-4xl">
-                  auto_awesome
-                </span>
-                <span className="font-label-caps text-label-caps text-primary bg-primary/10 px-2 py-1 rounded">
-                  240 ITEMS
-                </span>
-              </div>
-              <h3 className="font-headline-md text-headline-md mb-2">Arcanas</h3>
-              <p className="font-body-sm text-on-surface-variant">
-                Modelos base alterados, animaciones personalizadas y efectos premium.
-              </p>
-            </Link>
-            <Link
-              href="/catalogo"
-              className="glass-card p-6 rounded-xl group cursor-pointer hover:border-secondary/50 transition-all border border-transparent"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <span className="material-symbols-outlined text-secondary text-4xl">
-                  verified
-                </span>
-                <span className="font-label-caps text-label-caps text-secondary bg-secondary/10 px-2 py-1 rounded">
-                  1,250 ITEMS
-                </span>
-              </div>
-              <h3 className="font-headline-md text-headline-md mb-2">Inmortales</h3>
-              <p className="font-body-sm text-on-surface-variant">
-                Efectos de hechizo exclusivos de los compendios y tesoros de temporada.
-              </p>
-            </Link>
-            <Link
-              href="/catalogo"
-              className="glass-card p-6 rounded-xl group cursor-pointer hover:border-white/50 transition-all border border-transparent"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <span className="material-symbols-outlined text-on-surface text-4xl">
-                  inventory_2
-                </span>
-                <span className="font-label-caps text-label-caps text-on-surface bg-white/10 px-2 py-1 rounded">
-                  5,000+ ITEMS
-                </span>
-              </div>
-              <h3 className="font-headline-md text-headline-md mb-2">Sets y Bundles</h3>
-              <p className="font-body-sm text-on-surface-variant">
-                Equipamiento completo para tus héroes favoritos en packs sellados.
-              </p>
-            </Link>
-          </div>
-        </section>
-
-        {/* Items destacados */}
-        <section className="py-16 px-margin-mobile md:px-margin-desktop bg-surface-container-low/30">
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <span className="font-label-caps text-label-caps text-primary mb-2 block">
-                MERCADO ACTIVO
-              </span>
-              <h2 className="font-headline-lg text-headline-lg">Items Destacados</h2>
-            </div>
-            <Link
-              href="/catalogo"
-              className="text-primary font-label-caps text-label-caps flex items-center gap-2 hover:underline transition-all"
-            >
-              VER TODO EL CATÁLOGO
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-gutter">
-            {featured.map((item) => (
-              <Link
-                key={item.id}
-                href={`/catalogo/${item.id}`}
-                className={`bg-surface-container rounded-lg overflow-hidden border border-white/5 group ${RARITY_CLASS[item.rarity]} hover:-translate-y-2 transition-all duration-300`}
-              >
-                <div className="relative h-48 w-full bg-surface-container-high flex items-center justify-center p-4">
-                  <ImagePlaceholder label={item.imageLabel} className="w-full h-full" />
-                  <div className="absolute top-2 left-2">
-                    <span className="font-label-caps text-[10px] bg-secondary/20 text-secondary border border-secondary/30 px-2 py-0.5 rounded">
-                      EN VENTA
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <p className={`font-label-caps text-label-caps mb-1 ${RARITY_TEXT_CLASS[item.rarity]}`}>
-                    {RARITY_LABEL[item.rarity]}
+        {/* Los más valiosos — items reales del catálogo, de mayor a menor
+            precio. Llena el hueco que dejaba la página sin ningún item
+            visible fuera del catálogo. */}
+        {topItems.length > 0 && (
+          <Reveal>
+            <section className="py-24 max-w-container-max mx-auto">
+              <div className="flex justify-between items-end mb-10 px-margin-mobile md:px-margin-desktop">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface mb-2">
+                    Los más valiosos
+                  </h2>
+                  <p className="font-body-md text-on-surface-variant max-w-[52ch]">
+                    Los items de mayor precio disponibles ahora mismo en el catálogo.
                   </p>
-                  <h4 className="font-headline-md text-body-md mb-4 truncate">{item.name}</h4>
-                  <div className="flex justify-between items-center">
-                    <span className="font-body-sm text-on-surface-variant">{itemSubtitle(item)}</span>
-                    <span className="font-price-display text-price-display text-on-surface">
-                      {formatPEN(item.price)}
-                    </span>
-                  </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </section>
+                <Link
+                  href="/catalogo"
+                  className="hidden sm:inline-flex items-center gap-2 border border-outline text-on-surface font-medium text-body-sm px-6 py-3 rounded-full hover:bg-white/5 transition-colors shrink-0 ml-4"
+                >
+                  Ver catálogo
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </Link>
+              </div>
+              <TopItemsMarquee items={topItems} />
+            </section>
+          </Reveal>
+        )}
 
-        {/* Confianza */}
-        <section className="py-20 px-margin-mobile md:px-margin-desktop border-t border-white/5">
-          <div className="flex flex-wrap justify-center gap-12 md:gap-32 opacity-80">
-            <div className="text-center">
-              <div className="font-headline-lg text-headline-lg text-primary">+50k</div>
-              <div className="font-label-caps text-label-caps text-on-surface-variant">
-                TRADES EXITOSOS
+        {/* Medallas — refuerza el mensaje de Salas: sin importar tu rango,
+            la comunidad es grande. Los íconos son arte oficial de Valve;
+            se detectan solos si los subes a public/media/home/ranks/
+            (ver README.txt ahí), y mientras tanto se ve un círculo con
+            la inicial del rango para no dejar el layout roto. Fondo
+            opcional (ranks-bg.jpg) con velo oscuro para que el texto y
+            los íconos blancos sigan leyéndose sea cual sea la imagen. */}
+        <Reveal>
+          <section
+            className="relative py-24 px-margin-mobile md:px-margin-desktop border-t border-outline-variant overflow-hidden"
+            style={
+              hasRanksBackground
+                ? { backgroundImage: "url(/media/home/ranks-bg.jpg)", backgroundSize: "cover", backgroundPosition: "center" }
+                : undefined
+            }
+          >
+            {hasRanksBackground && (
+              <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/85 to-background" />
+            )}
+            <div className="relative max-w-container-max mx-auto text-center">
+              <h2 className="font-headline-lg text-headline-lg text-on-surface mb-3">
+                Siempre hay una sala para tu medalla
+              </h2>
+              <p className="font-body-md text-on-surface-variant max-w-[56ch] mx-auto mb-12">
+                No hace falta ser Inmortal — nuestra comunidad es grande, así que sea cual sea
+                tu medalla, vas a encontrar salas con jugadores de tu mismo nivel.
+              </p>
+              <div className="overflow-x-auto" style={{ paddingTop: `${RANK_MAX_LIFT + 1}rem` }}>
+                <div className="flex items-end justify-center gap-4 md:gap-6 min-w-max px-4 pb-2">
+                  {rankCurve.map((rank) => (
+                    <div
+                      key={rank.slug}
+                      className="flex flex-col items-center gap-3"
+                      style={{ transform: `translateY(-${rank.lift}rem)` }}
+                    >
+                      {rank.iconUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={rank.iconUrl}
+                          alt={rank.label}
+                          className="object-contain"
+                          style={{ width: `${rank.size}rem`, height: `${rank.size}rem` }}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-full bg-surface-container border border-outline-variant flex items-center justify-center shrink-0"
+                          style={{ width: `${rank.size}rem`, height: `${rank.size}rem` }}
+                        >
+                          <span className="font-headline-md text-on-surface-variant">{rank.label[0]}</span>
+                        </div>
+                      )}
+                      <span className="font-body-sm text-sm text-on-surface-variant whitespace-nowrap">
+                        {rank.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="text-center">
-              <div className="font-headline-lg text-headline-lg text-primary">24/7</div>
-              <div className="font-label-caps text-label-caps text-on-surface-variant">
-                SOPORTE EN VIVO
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="font-headline-lg text-headline-lg text-primary">100%</div>
-              <div className="font-label-caps text-label-caps text-on-surface-variant">
-                SEGURO POR STEAM
-              </div>
-            </div>
-          </div>
-        </section>
+          </section>
+        </Reveal>
       </main>
       <Footer />
       <BottomNav />

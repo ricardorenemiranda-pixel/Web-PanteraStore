@@ -22,7 +22,7 @@ export default function ImagePlaceholder({
 }: ImagePlaceholderProps) {
   return (
     <div
-      className={`img-placeholder flex flex-col items-center justify-center gap-2 border border-dashed border-white/15 bg-surface-container-low text-on-surface-variant ${rarityClass} ${className}`}
+      className={`img-placeholder flex flex-col items-center justify-center gap-2 border border-dashed border-on-surface/15 bg-surface-container-low text-on-surface-variant ${rarityClass} ${className}`}
     >
       <span className="material-symbols-outlined text-[32px] opacity-60">
         {icon}

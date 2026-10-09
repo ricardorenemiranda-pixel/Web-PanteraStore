@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { useSellableInventory } from "@/lib/useSellableInventory";
-import { RARITY_CLASS, RARITY_LABEL, RARITY_TEXT_CLASS } from "@/lib/mock-data";
+import { RARITY_CLASS, RARITY_LABEL, RARITY_BADGE_CLASS, RARITY_DOT_CLASS } from "@/lib/mock-data";
 import { formatPEN } from "@/lib/currency";
 
 export default function InventarioPage() {
@@ -59,7 +59,7 @@ export default function InventarioPage() {
                 type="button"
                 onClick={refresh}
                 disabled={refreshing}
-                className="glass-panel px-4 py-2 flex items-center gap-2 rounded-lg border border-white/10 hover:border-primary/40 transition-colors disabled:opacity-50 self-start"
+                className="glass-panel px-4 py-2 flex items-center gap-2 rounded-lg border border-on-surface/10 hover:border-primary/40 transition-colors disabled:opacity-50 self-start"
               >
                 <span
                   className={`material-symbols-outlined text-primary text-sm ${refreshing ? "animate-spin" : ""}`}
@@ -104,7 +104,7 @@ export default function InventarioPage() {
             <button
               type="button"
               onClick={refresh}
-              className="glass-panel px-4 py-2 rounded-lg border border-white/10 hover:border-primary/40 transition-colors font-label-caps text-on-surface"
+              className="glass-panel px-4 py-2 rounded-lg border border-on-surface/10 hover:border-primary/40 transition-colors font-label-caps text-on-surface"
             >
               Reintentar
             </button>
@@ -112,7 +112,7 @@ export default function InventarioPage() {
         )}
 
         {status === "ready" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-gutter">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {items.map((item) => {
               const selected = selectedIds.has(item.assetId);
               const unavailable = item.buybackPrice === null;
@@ -120,37 +120,48 @@ export default function InventarioPage() {
                 <div
                   key={item.assetId}
                   onClick={() => toggle(item.assetId, item.buybackPrice)}
-                  className={`item-card glass-panel group relative flex flex-col p-0 overflow-hidden transition-all ${RARITY_CLASS[item.rarity]} ${
-                    unavailable ? "opacity-50 cursor-not-allowed" : "hover:brightness-110 cursor-pointer"
-                  } ${selected ? "ring-2 ring-primary bg-primary/5" : ""}`}
+                  style={{ borderRadius: 0 }}
+                  className={`surface-card group relative flex flex-col ${RARITY_CLASS[item.rarity]} ${
+                    unavailable ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  } ${selected ? "ring-2 ring-primary" : ""}`}
                 >
-                  <div className="absolute top-3 left-3 z-20">
-                    <input
-                      className="custom-checkbox w-5 h-5 rounded border-white/20 bg-black/40 text-primary focus:ring-primary pointer-events-none"
-                      type="checkbox"
-                      checked={selected}
-                      readOnly
-                    />
-                  </div>
-                  <div className="relative w-full aspect-square bg-[#0a0a0a] flex items-center justify-center p-4">
+                  {/* Bloque 1: imagen */}
+                  <div className="relative aspect-[128/85] w-full overflow-hidden">
+                    <div className={`absolute inset-0 ${RARITY_DOT_CLASS[item.rarity]} opacity-[0.14]`} />
+                    <div className="absolute inset-0 bg-surface-container-lowest/70" />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={item.imageUrl}
                       alt={item.name}
-                      className="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
                     />
-                    <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+                    <div className="absolute top-2 left-2 z-20">
+                      <input
+                        className="custom-checkbox w-5 h-5 rounded border-black/20 bg-black/40 text-primary focus:ring-primary pointer-events-none"
+                        type="checkbox"
+                        checked={selected}
+                        readOnly
+                      />
+                    </div>
                   </div>
+                  {/* Bloque 2: texto */}
                   <div className="p-4 flex flex-col gap-1">
-                    <span className={`font-label-caps text-[10px] font-bold ${RARITY_TEXT_CLASS[item.rarity]}`}>
-                      {RARITY_LABEL[item.rarity].toUpperCase()}
+                    <span className="font-label-caps text-[9px] uppercase tracking-widest text-primary">
+                      Recompra estimada
                     </span>
-                    <h3 className="font-body-md font-bold text-on-surface truncate">{item.name}</h3>
-                    <div className="mt-4 flex flex-col">
-                      <span className="font-label-caps text-[10px] text-on-surface-variant">
-                        RECOMPRA ESTIMADA
+                    <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest truncate">
+                      {item.hero ?? "Universal"}
+                    </span>
+                    <h3 className="font-body-md text-on-surface group-hover:text-primary transition-colors truncate">
+                      {item.name}
+                    </h3>
+                    <div className="flex justify-between items-end mt-2">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold ${RARITY_BADGE_CLASS[item.rarity]}`}>
+                        {RARITY_LABEL[item.rarity]}
                       </span>
-                      <span className="font-price-display text-price-display text-primary">
+                      <span className="figure-nums text-on-surface text-price-display">
                         {unavailable ? "No disponible" : formatPEN(item.buybackPrice as number)}
                       </span>
                     </div>
@@ -175,7 +186,7 @@ export default function InventarioPage() {
         }`}
       >
         <div className="mx-auto max-w-5xl px-4 pb-6">
-          <div className="bg-surface-container-highest/95 backdrop-blur-xl border border-white/10 rounded-full h-20 px-8 flex items-center justify-between shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
+          <div className="bg-surface-container-highest/95 backdrop-blur-xl border border-on-surface/10 rounded-full h-20 px-8 flex items-center justify-between shadow-[0_8px_40px_rgba(0,0,0,0.45)]">
             <div className="flex items-center gap-8">
               <div className="flex flex-col">
                 <span className="font-headline-md text-primary leading-none">{count}</span>
@@ -183,7 +194,7 @@ export default function InventarioPage() {
                   Items Seleccionados
                 </span>
               </div>
-              <div className="w-px h-8 bg-white/10" />
+              <div className="w-px h-8 bg-on-surface/10" />
               <div className="flex flex-col">
                 <span className="font-headline-md text-on-surface leading-none">
                   {formatPEN(total)}

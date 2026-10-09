@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SteamMarketGateway } from '../../domain/ports/steam-market.port';
+import {
+  SteamMarketGateway,
+  SteamRateLimitedException,
+} from '../../domain/ports/steam-market.port';
 
 const DOTA2_APP_ID = 570;
 // Código de moneda de Steam para Soles peruanos — verificado en vivo contra
@@ -24,7 +27,8 @@ interface CacheEntry {
  * simultáneos, la gran mayoría volvió 429). Por eso este gateway:
  *   1. Cachea cada precio en memoria un rato (mismo item se pide seguido
  *      desde catálogo/inventario de distintos usuarios).
- *   2. Reintenta una vez con espera si Steam responde 429.
+ *   2. Reintenta una vez con espera si Steam responde 429; si sigue en 429
+ *      lanza SteamRateLimitedException (no lo confunde con "sin precio").
  * El que llama a este gateway (ver GetSellableInventoryUseCase) además
  * limita cuántos requests dispara en paralelo — las dos cosas trabajan juntas.
  */
@@ -40,26 +44,41 @@ export class SteamMarketHttpGateway implements SteamMarketGateway {
     }
 
     const price = await this.fetchPrice(marketHashName);
-    this.cache.set(marketHashName, { price, expiresAt: Date.now() + CACHE_TTL_MS });
+    this.cache.set(marketHashName, {
+      price,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
     return price;
   }
 
-  private async fetchPrice(marketHashName: string, isRetry = false): Promise<number | null> {
+  private async fetchPrice(
+    marketHashName: string,
+    isRetry = false,
+  ): Promise<number | null> {
     const url = new URL('https://steamcommunity.com/market/priceoverview/');
     url.searchParams.set('appid', String(DOTA2_APP_ID));
     url.searchParams.set('currency', String(STEAM_CURRENCY_PEN));
     url.searchParams.set('market_hash_name', marketHashName);
 
     try {
-      const response = await fetch(url.toString(), { headers: { 'User-Agent': USER_AGENT } });
+      const response = await fetch(url.toString(), {
+        headers: { 'User-Agent': USER_AGENT },
+      });
 
       if (response.status === 429 && !isRetry) {
         await this.delay(2500);
         return this.fetchPrice(marketHashName, true);
       }
 
+      if (response.status === 429) {
+        this.logger.warn(`Steam Market respondió 429 para "${marketHashName}"`);
+        throw new SteamRateLimitedException();
+      }
+
       if (!response.ok) {
-        this.logger.warn(`Steam Market respondió ${response.status} para "${marketHashName}"`);
+        this.logger.warn(
+          `Steam Market respondió ${response.status} para "${marketHashName}"`,
+        );
         return null;
       }
 
@@ -74,7 +93,11 @@ export class SteamMarketHttpGateway implements SteamMarketGateway {
 
       return this.parsePrice(data.lowest_price);
     } catch (error) {
-      this.logger.error(`Error consultando Steam Market para "${marketHashName}"`, error as Error);
+      if (error instanceof SteamRateLimitedException) throw error;
+      this.logger.error(
+        `Error consultando Steam Market para "${marketHashName}"`,
+        error as Error,
+      );
       return null;
     }
   }
@@ -84,7 +107,9 @@ export class SteamMarketHttpGateway implements SteamMarketGateway {
     // de filtrar, si no el punto del símbolo se cuela como si fuera parte
     // del número (ej. "S/.6.40" → sin esto quedaba ".6.40" → parseaba 0.6).
     const withoutCurrencySymbol = raw.replace(/^[^\d]+/, '');
-    const numeric = withoutCurrencySymbol.replace(/[^0-9.,]/g, '').replace(',', '.');
+    const numeric = withoutCurrencySymbol
+      .replace(/[^0-9.,]/g, '')
+      .replace(',', '.');
     const value = parseFloat(numeric);
     return Number.isFinite(value) ? value : null;
   }

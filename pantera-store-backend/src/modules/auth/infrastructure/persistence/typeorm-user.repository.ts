@@ -62,6 +62,11 @@ export class TypeOrmUserRepository implements UserRepository, OnModuleInit {
       tradeUrl: row.tradeUrl ?? undefined,
       email: row.email ?? undefined,
       passwordHash: row.passwordHash ?? undefined,
+      birthDate: row.birthDate ?? undefined,
+      adultConfirmedAt: row.adultConfirmedAt ?? undefined,
+      termsAcceptedVersion: row.termsAcceptedVersion ?? undefined,
+      termsAcceptedAt: row.termsAcceptedAt ?? undefined,
+      lastLoginIp: row.lastLoginIp ?? undefined,
     });
   }
 
@@ -75,6 +80,11 @@ export class TypeOrmUserRepository implements UserRepository, OnModuleInit {
     row.tradeUrl = user.tradeUrl ?? null;
     row.email = user.email ?? null;
     row.passwordHash = user.passwordHash ?? null;
+    row.birthDate = user.birthDate ?? null;
+    row.adultConfirmedAt = user.adultConfirmedAt ?? null;
+    row.termsAcceptedVersion = user.termsAcceptedVersion ?? null;
+    row.termsAcceptedAt = user.termsAcceptedAt ?? null;
+    row.lastLoginIp = user.lastLoginIp ?? null;
     return row;
   }
 }

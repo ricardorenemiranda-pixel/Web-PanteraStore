@@ -484,6 +484,17 @@ export const RARITY_TEXT_CLASS: Record<Rarity, string> = {
   ancient: "text-rarity-ancient",
 };
 
+export const RARITY_DOT_CLASS: Record<Rarity, string> = {
+  common: "bg-rarity-common",
+  uncommon: "bg-rarity-uncommon",
+  rare: "bg-rarity-rare",
+  mythical: "bg-rarity-mythical",
+  legendary: "bg-rarity-legendary",
+  immortal: "bg-rarity-immortal",
+  arcana: "bg-rarity-arcana",
+  ancient: "bg-rarity-ancient",
+};
+
 export const RARITY_BADGE_CLASS: Record<Rarity, string> = {
   common: "bg-rarity-common/10 text-rarity-common border border-rarity-common/20",
   uncommon: "bg-rarity-uncommon/10 text-rarity-uncommon border border-rarity-uncommon/20",

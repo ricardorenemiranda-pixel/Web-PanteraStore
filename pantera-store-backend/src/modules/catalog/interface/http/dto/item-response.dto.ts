@@ -16,10 +16,14 @@ export class SetPieceResponseDto {
  */
 export class ItemResponseDto {
   id: string;
+  /** Código corto para que el cliente lo mencione al escribir por WhatsApp. */
+  referenceCode: string;
   name: string;
   hero?: string;
   category: ItemCategory;
   rarity: Rarity;
+  description?: string;
+  steamMarketHashName?: string;
   marketPrice: number;
   price: number;
   buybackPrice: number;
@@ -40,10 +44,13 @@ export class ItemResponseDto {
     const { item, sellPrice, buybackPrice } = itemWithPrice;
     const dto = new ItemResponseDto();
     dto.id = item.id;
+    dto.referenceCode = item.referenceCode;
     dto.name = item.name;
     dto.hero = item.hero;
     dto.category = item.category;
     dto.rarity = item.rarity;
+    dto.description = item.description;
+    dto.steamMarketHashName = item.steamMarketHashName;
     dto.marketPrice = item.marketPrice;
     dto.price = sellPrice;
     dto.buybackPrice = buybackPrice;

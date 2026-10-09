@@ -28,3 +28,10 @@ export class ExternalServiceUnavailableException extends DomainException {
     super(message);
   }
 }
+
+/** El usuario está identificado pero no tiene derecho a hacer esto (ej. cancelar la sala de otro). */
+export class ForbiddenActionException extends DomainException {
+  constructor(message: string) {
+    super(message);
+  }
+}

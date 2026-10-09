@@ -12,6 +12,14 @@ export interface CurrentUser {
   /** Ausente si la cuenta todavía no vinculó Steam (registro local puro). */
   steamId?: string;
   email?: string;
+  /** Confirmó que es mayor de 18 años (obligatorio para jugar con dinero, recargar y retirar). */
+  adultConfirmed?: boolean;
+  /** Versión de los Términos que aceptó por última vez (null = nunca aceptó ninguna). */
+  termsAcceptedVersion?: number | null;
+  /** Si aceptó la versión VIGENTE de los Términos ahora mismo (obligatorio para jugar en salas). */
+  termsAccepted?: boolean;
+  /** La versión vigente de los Términos, para mostrarla en el gate de aceptación. */
+  termsVersion?: number;
 }
 
 export interface RegisterInput {
@@ -60,7 +68,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/auth/me`, { credentials: "include" });
-      setUser(res.ok ? ((await res.json()) as CurrentUser) : null);
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+      const profile = (await res.json()) as CurrentUser;
+      // Se pide aparte (no bloquea si falla): si no aceptó los Términos vigentes,
+      // los gates de salas lo van a exigir de todos modos al intentar jugar.
+      const gates = await fetch(`${BACKEND_URL}/auth/me/gates`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      setUser({
+        ...profile,
+        termsAccepted: gates?.termsAccepted,
+        termsVersion: gates?.termsVersion,
+      });
     } catch {
       setUser(null);
     } finally {

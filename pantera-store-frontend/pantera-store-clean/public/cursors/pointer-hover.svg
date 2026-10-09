@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Contorno oscuro -->
+  <path d="M4 3 L28 13 L16 17 L12 29 Z" fill="none" stroke="#131110" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Cuerpo ámbar, más brillante en hover -->
+  <path d="M4 3 L28 13 L16 17 L12 29 Z" fill="#F0BC5C" stroke="#4a3c1f" stroke-width="1" stroke-linejoin="round"/>
+  <!-- Faceta clara -->
+  <path d="M4 3 L28 13 L16 17 Z" fill="#FFE9B8" opacity="0.65"/>
+  <!-- Acento rojo LED más grande + halo, indicando "interactivo" -->
+  <circle cx="4" cy="3" r="4.5" fill="#E14B3B" opacity="0.35"/>
+  <circle cx="4" cy="3" r="2.8" fill="#F0796A" stroke="#131110" stroke-width="0.75"/>
+</svg>

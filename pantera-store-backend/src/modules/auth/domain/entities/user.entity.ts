@@ -15,6 +15,35 @@ export interface UserProps {
   email?: string;
   /** Ausente si la cuenta se creó solo vía Steam, sin registro local. */
   passwordHash?: string;
+  /** Fecha de nacimiento declarada (YYYY-MM-DD). Solo existe si confirmó ser mayor de edad. */
+  birthDate?: string;
+  /** Cuándo confirmó que es mayor de 18. Sin esto no puede jugar con dinero ni recargar. */
+  adultConfirmedAt?: Date;
+  /** Versión de los Términos que aceptó (ver config.terms.version). Sin esto no puede jugar ni mover dinero. */
+  termsAcceptedVersion?: number;
+  termsAcceptedAt?: Date;
+  /** Última IP con la que inició sesión — solo para detectar cuentas duplicadas, nunca se muestra al usuario. */
+  lastLoginIp?: string;
+}
+
+export const ADULT_AGE = 18;
+
+/** Años cumplidos a `now` para una fecha YYYY-MM-DD; null si la fecha no es válida. */
+export function ageOn(birthDate: string, now: Date): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate);
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const born = new Date(Date.UTC(year, month - 1, day));
+  // Rechaza fechas imposibles (30 de febrero): JS las "corrige" en silencio.
+  if (born.getUTCFullYear() !== year || born.getUTCMonth() !== month - 1 || born.getUTCDate() !== day) {
+    return null;
+  }
+  if (born.getTime() > now.getTime()) return null;
+  let age = now.getUTCFullYear() - year;
+  const birthdayPassed =
+    now.getUTCMonth() > month - 1 || (now.getUTCMonth() === month - 1 && now.getUTCDate() >= day);
+  if (!birthdayPassed) age -= 1;
+  return age;
 }
 
 const STEAM_TRADE_URL_PATTERN = /^https:\/\/steamcommunity\.com\/tradeoffer\/new\/\?partner=\d+&token=\w+$/;
@@ -64,6 +93,64 @@ export class User {
 
   get tradeUrl(): string | undefined {
     return this.props.tradeUrl;
+  }
+
+  get birthDate(): string | undefined {
+    return this.props.birthDate;
+  }
+
+  get adultConfirmedAt(): Date | undefined {
+    return this.props.adultConfirmedAt;
+  }
+
+  /** ¿Confirmó que es mayor de 18? */
+  isAdult(): boolean {
+    return this.props.adultConfirmedAt !== undefined;
+  }
+
+  /**
+   * Declaración de mayoría de edad. Es una declaración del propio usuario
+   * (no una verificación de identidad): sirve como primer filtro, no como
+   * prueba legal de edad.
+   */
+  confirmAdult(birthDate: string, now: Date = new Date()): void {
+    const age = ageOn(birthDate, now);
+    if (age === null) {
+      throw new InvalidDomainStateException('La fecha de nacimiento no es válida (usa AAAA-MM-DD).');
+    }
+    if (age < ADULT_AGE) {
+      throw new InvalidDomainStateException(`Debes tener al menos ${ADULT_AGE} años para jugar con dinero.`);
+    }
+    this.props.birthDate = birthDate;
+    this.props.adultConfirmedAt = now;
+  }
+
+  get termsAcceptedVersion(): number | undefined {
+    return this.props.termsAcceptedVersion;
+  }
+
+  get termsAcceptedAt(): Date | undefined {
+    return this.props.termsAcceptedAt;
+  }
+
+  get lastLoginIp(): string | undefined {
+    return this.props.lastLoginIp;
+  }
+
+  hasAcceptedTerms(currentVersion: number): boolean {
+    return this.props.termsAcceptedVersion !== undefined && this.props.termsAcceptedVersion >= currentVersion;
+  }
+
+  acceptTerms(version: number, now: Date = new Date()): void {
+    if (!Number.isInteger(version) || version < 1) {
+      throw new InvalidDomainStateException('Versión de términos no válida.');
+    }
+    this.props.termsAcceptedVersion = version;
+    this.props.termsAcceptedAt = now;
+  }
+
+  recordLoginIp(ip: string | undefined): void {
+    this.props.lastLoginIp = ip || undefined;
   }
 
   isAdmin(): boolean {

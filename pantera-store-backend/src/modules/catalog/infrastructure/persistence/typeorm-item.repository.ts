@@ -32,18 +32,29 @@ export class TypeOrmItemRepository implements ItemRepository {
     return row ? this.toDomain(row) : null;
   }
 
+  async findByReferenceCode(referenceCode: string): Promise<Item | null> {
+    const row = await this.repo.findOne({ where: { referenceCode } });
+    return row ? this.toDomain(row) : null;
+  }
+
   async save(item: Item): Promise<void> {
     await this.repo.save(this.toOrm(item));
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.repo.delete({ id });
   }
 
   private toDomain(row: ItemOrmEntity): Item {
     return Item.create({
       id: row.id,
-      steamMarketHashName: row.steamMarketHashName,
+      referenceCode: row.referenceCode ?? row.id,
+      steamMarketHashName: row.steamMarketHashName ?? undefined,
       name: row.name,
       hero: row.hero ?? undefined,
       category: row.category,
       rarity: row.rarity,
+      description: row.description ?? undefined,
       marketPrice: row.marketPrice,
       markupPercentOverride: row.markupPercentOverride,
       imageUrl: row.imageUrl ?? undefined,
@@ -59,11 +70,13 @@ export class TypeOrmItemRepository implements ItemRepository {
   private toOrm(item: Item): ItemOrmEntity {
     const row = new ItemOrmEntity();
     row.id = item.id;
-    row.steamMarketHashName = item.steamMarketHashName;
+    row.referenceCode = item.referenceCode;
+    row.steamMarketHashName = item.steamMarketHashName ?? null;
     row.name = item.name;
     row.hero = item.hero ?? null;
     row.category = item.category;
     row.rarity = item.rarity;
+    row.description = item.description ?? null;
     row.marketPrice = item.marketPrice;
     row.markupPercentOverride = item.markupPercentOverride;
     row.imageUrl = item.imageUrl ?? null;

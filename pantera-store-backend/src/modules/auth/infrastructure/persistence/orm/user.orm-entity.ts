@@ -26,4 +26,19 @@ export class UserOrmEntity {
 
   @Column({ type: 'varchar', nullable: true })
   passwordHash!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  birthDate!: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  adultConfirmedAt!: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  termsAcceptedVersion!: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  termsAcceptedAt!: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  lastLoginIp!: string | null;
 }

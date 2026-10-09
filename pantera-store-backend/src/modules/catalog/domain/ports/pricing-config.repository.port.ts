@@ -26,7 +26,4 @@ export interface PricingConfigRepository {
   setSyncIntervalDays(days: number): Promise<void>;
   getLastFullSyncAt(): Promise<Date | null>;
   setLastFullSyncAt(date: Date): Promise<void>;
-  /** Cuándo corrió el último sync completo del catálogo de almacén (ver SyncWarehouseCatalogUseCase). */
-  getLastWarehouseSyncAt(): Promise<Date | null>;
-  setLastWarehouseSyncAt(date: Date): Promise<void>;
 }

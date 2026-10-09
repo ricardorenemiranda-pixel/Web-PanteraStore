@@ -1,8 +1,11 @@
+/* @import DEBE ir antes que cualquier otra regla (spec de CSS) — si va
+   después de los @tailwind, el navegador lo ignora en silencio y las
+   fuentes de Google Fonts nunca cargan (quedan en el fallback del sistema). */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap');
 
 /* Autohospedada en /public/fonts para no depender de que Google Fonts
    cargue a tiempo — si no, los íconos se ven como texto ("expand_more"). */
@@ -30,6 +33,32 @@
   vertical-align: middle;
 }
 
+/* Entrada del hero — título, texto y botones caen desde arriba en
+   cascada, como una intro de videojuego o un title card de cine. Se
+   dispara una sola vez al cargar la página (no al hacer scroll). */
+@keyframes hero-drop-in {
+  from { opacity: 0; transform: translateY(-32px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-title-drop,
+.hero-sub-drop,
+.hero-cta-drop {
+  opacity: 0;
+  animation: hero-drop-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.hero-title-drop { animation-delay: 0.1s; }
+.hero-sub-drop { animation-delay: 0.32s; }
+.hero-cta-drop { animation-delay: 0.5s; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-title-drop,
+  .hero-sub-drop,
+  .hero-cta-drop {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+}
+
 .rarity-common { border-bottom: 2px solid #B0C3D9; box-shadow: 0 10px 20px -10px rgba(176, 195, 217, 0.3); }
 .rarity-uncommon { border-bottom: 2px solid #5E98D9; box-shadow: 0 10px 20px -10px rgba(94, 152, 217, 0.3); }
 .rarity-rare { border-bottom: 2px solid #4B69FF; box-shadow: 0 10px 20px -10px rgba(75, 105, 255, 0.3); }
@@ -39,19 +68,32 @@
 .rarity-arcana { border-bottom: 2px solid #ADE55C; box-shadow: 0 10px 20px -10px rgba(173, 229, 92, 0.3); }
 .rarity-ancient { border-bottom: 2px solid #EB4B4B; box-shadow: 0 10px 20px -10px rgba(235, 75, 75, 0.3); }
 
+/* Panel sobre fondo morado oscuro — superficie ligeramente más clara que
+   el fondo, borde violeta sutil, resplandor superior tenue en vez de
+   sombra negra genérica (una sombra negra sobre morado se ve "sucia"). */
 .glass-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #231C3D;
+  border: 1px solid #332853;
+  box-shadow: inset 0 1px 0 rgba(241, 237, 250, 0.05);
 }
 
 .hero-gradient {
-  background: linear-gradient(to bottom, rgba(10,10,10,0) 0%, rgba(10,10,10,1) 100%);
+  background: linear-gradient(to bottom, rgba(20,16,31,0) 0%, rgba(20,16,31,1) 100%);
 }
 
+/* Fondo del sitio — morado con un segundo acento dorado apagado, en vez
+   de un morado plano parejo. Dos resplandores radiales fijos (no se
+   desplazan con el scroll) sobre la base sólida: uno dorado arriba a la
+   derecha, uno violeta más claro abajo a la izquierda, para que el
+   fondo tenga algo de profundidad detrás de las secciones con paneles
+   propios (que siguen siendo opacos encima). */
 body {
-  background-color: #0A0A0A;
-  color: #e5e2e1;
+  background-color: #14101F;
+  background-image:
+    radial-gradient(ellipse 90% 60% at 100% 0%, rgba(156, 100, 24, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(177, 138, 232, 0.10) 0%, transparent 60%);
+  background-attachment: fixed;
+  color: #F1EDFA;
   overflow-x: hidden;
 }
 
@@ -59,17 +101,17 @@ body {
 .img-placeholder {
   background-image: repeating-linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.03),
-    rgba(255, 255, 255, 0.03) 10px,
-    rgba(255, 255, 255, 0.06) 10px,
-    rgba(255, 255, 255, 0.06) 20px
+    rgba(241, 237, 250, 0.03),
+    rgba(241, 237, 250, 0.03) 10px,
+    rgba(241, 237, 250, 0.05) 10px,
+    rgba(241, 237, 250, 0.05) 20px
   );
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #231C3D;
+  border: 1px solid #332853;
+  box-shadow: inset 0 1px 0 rgba(241, 237, 250, 0.05);
 }
 
 .steam-button {
@@ -102,7 +144,335 @@ body {
   position: absolute;
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(184, 31, 12, 0.15) 0%, rgba(184, 31, 12, 0) 70%);
+  background: radial-gradient(circle, rgba(177, 138, 232, 0.18) 0%, rgba(177, 138, 232, 0) 70%);
   pointer-events: none;
   z-index: -1;
+}
+
+/* Sin flechitas nativas de subir/bajar en inputs numéricos — se edita
+   escribiendo el número directo, no con esos controles. */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Campo obligatorio vacío al intentar guardar — sacude y resalta en rojo
+   para que salte a la vista cuál falta llenar. */
+@keyframes field-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.field-error {
+  border-color: #e0574a !important;
+  box-shadow: 0 0 0 1px rgba(224, 87, 74, 0.35);
+  animation: field-shake 0.4s ease-in-out;
+}
+
+/* Tarjeta sobre fondo morado oscuro: superficie violeta en capa, radio
+   grande, borde apenas visible — la profundidad aparece al interactuar
+   (se aclara un poco y "levanta"), en reposo se apoya casi plana. */
+.surface-card {
+  background: #1c1630;
+  border: 1px solid #332853;
+  border-radius: 1.25rem;
+  transition: background 0.3s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.3s cubic-bezier(0.23, 1, 0.32, 1), transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.surface-card:hover {
+  background: #231c3d;
+  border-color: #453a66;
+  transform: translateY(-2px);
+}
+
+.surface-card:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Placa de ícono — plana, sin decoración en reposo; solo tiñe con el
+   color de marca del ítem cuando el puntero pasa por la tarjeta. */
+.icon-tile {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2b2248;
+  transition: background 0.2s ease;
+}
+.group:hover .icon-tile {
+  background: currentColor;
+  opacity: 0.18;
+}
+
+/* Cifras alineadas — para precios, tasas y códigos: tabular-nums para
+   que las columnas de números siempre calcen, sin costume "tech" (nada
+   de mono ni glow); es la misma tipografía del resto de la página. */
+.figure-nums {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Cambio de valor — al reordenar o actualizar un precio, la cifra entra
+   con un fundido + leve caída, nunca un salto seco. */
+@keyframes value-settle {
+  0% { opacity: 0; transform: translateY(-30%); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.value-settle {
+  animation: value-settle 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* "Detent" — el pequeño golpe de un switch físico al trabar en su
+   posición. Para toggles de filtro, checkboxes, tabs. */
+.detent {
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.detent:active {
+  transform: scale(0.96);
+}
+
+/* Muro de héroes — cada fila es una tira duplicada dos veces que se
+   desliza -50% de su ancho y vuelve a empezar: como el contenido es
+   idéntico en ambas mitades, el salto del loop es invisible. Pausa al
+   pasar el mouse (para poder leer un nombre) y se detiene del todo con
+   prefers-reduced-motion en vez de solo bajar la velocidad. */
+.marquee-row {
+  overflow: hidden;
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  gap: 1rem;
+  animation-name: marquee-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.marquee-row:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-cell {
+  position: relative;
+  flex-shrink: 0;
+  /* Ancho fijo, alto fijo — crece hacia los costados, no hacia arriba
+     (antes usaba aspect-ratio, que estiraba la altura junto al ancho). */
+  width: 18rem;
+  height: 7rem;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  background: #2b2248;
+  display: block;
+}
+/* El zoom pasa en la imagen, no en la celda — así la celda nunca crece
+   ni se monta sobre sus vecinas dentro de la fila. */
+.marquee-cell-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.marquee-cell:hover .marquee-cell-img,
+.marquee-cell:focus-visible .marquee-cell-img {
+  transform: scale(1.12);
+}
+/* Nombre + ícono de atributo — ocultos hasta hover/foco, aparecen
+   juntos sobre un velo inferior para que siempre se lean. */
+.marquee-cell-label {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 0.5rem 0.7rem;
+  background: linear-gradient(to top, rgba(20, 16, 31, 0.92), transparent);
+  color: #f1edfa;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.marquee-cell:hover .marquee-cell-label,
+.marquee-cell:focus-visible .marquee-cell-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+.marquee-cell-attribute-icon {
+  width: 1rem;
+  height: 1rem;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Tarjeta de item para el carrusel de "más valiosos" — a diferencia de
+   la ficha de héroe, el precio va siempre visible (no oculto hasta
+   hover): en un contexto de venta, el dato del precio no se esconde. */
+.item-marquee-cell {
+  flex-shrink: 0;
+  width: 10rem;
+  overflow: hidden;
+  background: #1c1630;
+  border: 1px solid #332853;
+  transition: border-color 0.25s ease, transform 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+  display: block;
+}
+.item-marquee-cell:hover,
+.item-marquee-cell:focus-visible {
+  border-color: #453a66;
+  transform: translateY(-3px);
+}
+.item-marquee-cell-image {
+  position: relative;
+  width: 100%;
+  /* 128:85 — proporción real de los íconos de Steam, así el contain
+     no deja franjas vacías arriba/abajo. */
+  aspect-ratio: 128 / 85;
+  background: #2b2248;
+  overflow: hidden;
+}
+.item-marquee-cell-image img {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.35rem;
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.item-marquee-cell:hover .item-marquee-cell-image img {
+  transform: scale(1.08);
+}
+.item-marquee-cell-dot {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+.item-marquee-cell-info {
+  padding: 0.75rem 0.85rem 0.95rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* Reveal al hacer scroll — un único momento de entrada (fundido + leve
+   subida), nunca un rebote ni algo que se repita en cada elemento por
+   separado. Arranca visible por defecto: sin JS o con
+   prefers-reduced-motion, el contenido nunca queda oculto. */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Intro de bienvenida (se muestra en cada carga) — flash de impacto, logo
+   revelado letra por letra con máscara, subrayado que se dibuja y tagline.
+   Todo animado con transform/opacity (nada de layout) para que corra fluido. */
+@keyframes intro-flash-anim {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.intro-flash {
+  background: radial-gradient(
+    circle,
+    rgba(201, 166, 224, 0.35) 0%,
+    rgba(177, 138, 232, 0.2) 40%,
+    rgba(20, 16, 31, 0) 70%
+  );
+  animation: intro-flash-anim 0.6s ease-out forwards;
+}
+
+/* Reveal por máscara (split text): cada letra vive dentro de una ventana
+   con overflow:hidden (.intro-letter-mask) que la tapa — la letra arranca
+   desplazada hacia abajo (fuera de esa ventana) y se desliza hacia arriba
+   hasta su lugar, revelándose como si una cortina se levantara. El
+   animation-delay de cada una lo calcula AnimatedLetters en el componente. */
+.intro-letter-mask {
+  display: inline-block;
+  overflow: hidden;
+}
+@keyframes intro-letter-anim {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0%);
+  }
+}
+.intro-letter {
+  display: inline-block;
+  transform: translateY(100%);
+  animation: intro-letter-anim 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+@keyframes intro-underline-anim {
+  to {
+    width: 220px;
+  }
+}
+.intro-underline {
+  animation: intro-underline-anim 0.5s ease-out 1.25s forwards;
+}
+
+@keyframes intro-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.intro-tagline {
+  animation: intro-fade-in-up 0.5s ease-out 1.75s forwards;
+}
+.intro-skip {
+  animation: intro-fade-in-up 0.5s ease-out 2.15s forwards;
+}
+
+/* Tarjeta de red social — el ícono es una máscara SVG pintada con
+   currentColor-like fill; en reposo gris, en hover toma el color de la marca. */
+.social-tile-icon {
+  background-color: #a99bc7;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  transition: background-color 0.25s ease, transform 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.social-tile:hover .social-tile-icon {
+  background-color: var(--brand);
+  transform: scale(1.08);
 }

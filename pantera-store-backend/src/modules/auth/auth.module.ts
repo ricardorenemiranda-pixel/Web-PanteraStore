@@ -12,6 +12,8 @@ import { AuthController } from './interface/http/auth.controller';
 import { JwtAuthGuard } from './interface/guards/jwt-auth.guard';
 import { RolesGuard } from './interface/guards/roles.guard';
 import { SteamAuthGuard } from './interface/guards/steam-auth.guard';
+import { AcceptTermsUseCase } from './application/use-cases/accept-terms.use-case';
+import { ConfirmAdultUseCase } from './application/use-cases/confirm-adult.use-case';
 import { LoginWithPasswordUseCase } from './application/use-cases/login-with-password.use-case';
 import { RegisterUserUseCase } from './application/use-cases/register-user.use-case';
 import { UpdateTradeUrlUseCase } from './application/use-cases/update-trade-url.use-case';
@@ -39,6 +41,8 @@ import { UpdateTradeUrlUseCase } from './application/use-cases/update-trade-url.
     UpdateTradeUrlUseCase,
     RegisterUserUseCase,
     LoginWithPasswordUseCase,
+    ConfirmAdultUseCase,
+    AcceptTermsUseCase,
   ],
   // Se exportan para que catalog/orders puedan proteger sus propias rutas
   // (@UseGuards(JwtAuthGuard, RolesGuard)) y leer el usuario real (ej. para

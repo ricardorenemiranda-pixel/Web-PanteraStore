@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Contorno oscuro para que se vea bien sobre cualquier fondo -->
+  <path d="M4 3 L28 13 L16 17 L12 29 Z" fill="none" stroke="#131110" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Cuerpo ámbar LED -->
+  <path d="M4 3 L28 13 L16 17 L12 29 Z" fill="#E0A63C" stroke="#4a3c1f" stroke-width="1" stroke-linejoin="round"/>
+  <!-- Faceta clara -->
+  <path d="M4 3 L28 13 L16 17 Z" fill="#F0D9A0" opacity="0.55"/>
+  <!-- Acento rojo LED en la punta -->
+  <circle cx="4" cy="3" r="2.6" fill="#E14B3B" stroke="#131110" stroke-width="0.75"/>
+</svg>

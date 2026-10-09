@@ -10,6 +10,8 @@ export interface CatalogSetPiece {
 
 export interface CatalogItem {
   id: string;
+  /** Código corto del item — se muestra al usuario para que lo mencione al escribir por WhatsApp. */
+  referenceCode: string;
   name: string;
   hero?: string;
   category: ItemCategory;
